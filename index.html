@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#060e0b">
+<title>KoPit</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#060e0b;--bg2:#0a1410;--sur:#0e1a14;--sur2:#121f18;
+  --brd:rgba(255,255,255,0.07);--brd2:rgba(255,255,255,0.12);
+  --txt:#dde8e2;--txt2:#6b8c7a;--txt3:#344d40;
+  --ok:rgba(100,180,140,0.9);--ok-bg:rgba(45,106,79,0.15);
+  --wn:rgba(180,145,80,0.9);--wn-bg:rgba(122,92,40,0.15);
+  --er:rgba(180,90,110,0.9);--er-bg:rgba(122,40,56,0.15);
+  --acc:rgba(45,106,79,0.5);--acc-brd:rgba(45,106,79,0.3);
+  --r:10px;--font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;--mono:'SF Mono','Courier New',monospace;
+}
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
+body{overflow-x:hidden}
+
+/* HEADER */
+.header{position:sticky;top:0;z-index:100;background:var(--bg2);border-bottom:1px solid var(--brd);padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.header-logo{display:flex;align-items:center;gap:9px}
+.logo-dot{width:28px;height:28px;border-radius:8px;background:rgba(45,106,79,0.2);border:1px solid var(--acc-brd);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--ok);font-family:var(--mono)}
+.logo-name{font-size:16px;font-weight:700;letter-spacing:-.3px}
+.header-sync{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt3);font-family:var(--mono)}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:pulse 2.5s infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* NAV TABS */
+.tabs{display:flex;overflow-x:auto;gap:0;background:var(--bg2);border-bottom:1px solid var(--brd);padding:0 4px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;padding:10px 14px;font-size:12px;font-weight:600;color:var(--txt3);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
+.tab.on{color:var(--ok);border-bottom-color:rgba(45,106,79,0.7)}
+
+/* PANELS */
+.panel{display:none;padding:14px 14px 80px}.panel.on{display:block}
+@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.fi{animation:fi .2s ease}
+
+/* STAT CARDS */
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px}
+.sc{background:var(--sur);border:1px solid var(--brd);border-radius:var(--r);padding:12px 14px;border-top:2px solid var(--acc-brd)}
+.sl{font-size:10px;color:var(--txt3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+.sv{font-size:20px;font-weight:700;color:var(--txt)}
+.ss{font-size:11px;color:var(--txt3);margin-top:3px}
+.ss.up{color:var(--ok)}.ss.dn{color:var(--er)}.ss.wn{color:var(--wn)}
+
+/* CARD */
+.card{background:var(--sur);border:1px solid var(--brd);border-radius:var(--r);margin-bottom:11px;overflow:hidden}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--brd)}
+.card-title{font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:var(--mono)}
+.card-body{padding:10px 14px}
+
+/* ROWS */
+.row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--brd)}
+.row:last-child{border-bottom:none}
+.row-main{flex:1;min-width:0}
+.row-title{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-sub{font-size:11px;color:var(--txt3);margin-top:2px}
+.row-val{font-size:13px;font-weight:600;font-family:var(--mono);flex-shrink:0}
+
+/* TAGS */
+.tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;white-space:nowrap}
+.tok{background:var(--ok-bg);color:var(--ok);border:1px solid rgba(45,106,79,0.2)}
+.twn{background:var(--wn-bg);color:var(--wn);border:1px solid rgba(122,92,40,0.2)}
+.ter{background:var(--er-bg);color:var(--er);border:1px solid rgba(122,40,56,0.2)}
+.tbl{background:rgba(40,74,122,0.15);color:rgba(100,150,200,0.85);border:1px solid rgba(40,74,122,0.2)}
+.tnn{background:var(--sur2);color:var(--txt2);border:1px solid var(--brd)}
+
+/* PRIORITY DOT */
+.pr{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.prh{background:var(--er)}.prm{background:var(--wn)}.prl{background:var(--ok)}
+
+/* PROGRESS */
+.prog{height:4px;background:var(--sur2);border-radius:2px;overflow:hidden;margin-top:6px}
+.pf{height:100%;border-radius:2px}
+
+/* ALERTS */
+.alert{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:8px;margin-bottom:7px;font-size:12px}
+.alert.urg{background:var(--er-bg);border:1px solid rgba(122,40,56,0.2);color:var(--er)}
+.alert.warn{background:var(--wn-bg);border:1px solid rgba(122,92,40,0.2);color:var(--wn)}
+.alert.ok{background:var(--ok-bg);border:1px solid rgba(45,106,79,0.2);color:var(--ok)}
+
+/* FOCUS BANNER */
+.focus-banner{background:linear-gradient(135deg,rgba(45,106,79,0.18),rgba(22,53,40,0.25));border:1px solid var(--acc-brd);border-radius:var(--r);padding:13px 14px;margin-bottom:14px}
+.focus-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--ok);font-family:var(--mono);margin-bottom:5px;display:flex;align-items:center;gap:5px}
+.focus-dot{width:5px;height:5px;border-radius:50%;background:var(--ok);animation:pulse 2.5s infinite}
+.focus-text{font-size:14px;font-weight:600;line-height:1.4}
+
+/* EVENT */
+.ev-item{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--brd);align-items:flex-start}
+.ev-item:last-child{border-bottom:none}
+.ev-bar{width:3px;border-radius:2px;align-self:stretch;flex-shrink:0;min-height:32px}
+.ev-main{flex:1}
+.ev-title{font-size:13px;font-weight:500}
+.ev-time{font-size:11px;color:var(--txt3);font-family:var(--mono);margin-top:2px}
+
+/* ACCOUNT */
+.acc-card{background:var(--sur2);border:1px solid var(--brd);border-radius:var(--r);padding:12px 14px;margin-bottom:9px;border-top-width:2px}
+
+/* LOADING */
+#loader{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:14px}
+.loader-logo{width:52px;height:52px;border-radius:14px;background:rgba(45,106,79,0.2);border:1px solid var(--acc-brd);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--ok);font-family:var(--mono)}
+.loader-text{font-size:13px;color:var(--txt3);font-family:var(--mono)}
+.loader-bar{width:120px;height:2px;background:var(--sur2);border-radius:1px;overflow:hidden}
+.loader-fill{height:100%;background:rgba(45,106,79,0.7);border-radius:1px;animation:load 1.5s ease-in-out infinite}
+@keyframes load{0%{width:0;margin-left:0}50%{width:100%;margin-left:0}100%{width:0;margin-left:100%}}
+
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--brd);display:flex;padding:6px 0 calc(6px + env(safe-area-inset-bottom));z-index:100}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;cursor:pointer;color:var(--txt3);transition:color .2s;font-size:10px;font-weight:500}
+.bn-item.on{color:var(--ok)}.bn-icon{font-size:20px}
+
+/* EMPTY */
+.empty{text-align:center;padding:24px;color:var(--txt3);font-size:12px;font-family:var(--mono)}
+
+/* REFRESH BTN */
+.refresh-btn{display:flex;align-items:center;gap:6px;background:var(--ok-bg);border:1px solid var(--acc-brd);border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;color:var(--ok);cursor:pointer;margin:0 auto 14px;font-family:var(--font)}
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <div class="loader-logo">KP</div>
+  <div class="loader-text">Loading KoPit...</div>
+  <div class="loader-bar"><div class="loader-fill"></div></div>
+</div>
+
+<div id="shell" style="display:none">
+  <div class="header">
+    <div class="header-logo">
+      <div class="logo-dot">KP</div>
+      <div class="logo-name">KoPit</div>
+    </div>
+    <div class="header-sync"><span class="sync-dot"></span><span id="sync-time">Live</span></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab on" onclick="nav('dash',this)">Dashboard</div>
+    <div class="tab" onclick="nav('tasks',this)">Tasks</div>
+    <div class="tab" onclick="nav('clients',this)">Clients</div>
+    <div class="tab" onclick="nav('projects',this)">Projects</div>
+    <div class="tab" onclick="nav('finance',this)">Finance</div>
+    <div class="tab" onclick="nav('calendar',this)">Calendar</div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="panel on fi" id="panel-dash">
+    <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+    <div class="sg" id="d-stats"></div>
+    <div class="focus-banner" id="d-focus"></div>
+    <div class="card"><div class="card-head"><div class="card-title">Alerts</div></div><div class="card-body" id="d-alerts"></div></div>
+    <div class="card"><div class="card-head"><div class="card-title">Upcoming Events</div></div><div class="card-body" id="d-events"></div></div>
+    <div class="card"><div class="card-head"><div class="card-title">Active Projects</div></div><div class="card-body" id="d-projects"></div></div>
+  </div>
+
+  <!-- TASKS -->
+  <div class="panel fi" id="panel-tasks">
+    <div style="display:flex;gap:7px;margin-bottom:12px">
+      <button class="tag tok" style="cursor:pointer;padding:6px 12px;font-size:12px" onclick="filterTasks('all',this)">All</button>
+      <button class="tag tnn" style="cursor:pointer;padding:6px 12px;font-size:12px" onclick="filterTasks('high',this)">🔴 High</button>
+      <button class="tag tnn" style="cursor:pointer;padding:6px 12px;font-size:12px" onclick="filterTasks('medium',this)">🟡 Med</button>
+      <button class="tag tnn" style="cursor:pointer;padding:6px 12px;font-size:12px" onclick="filterTasks('done',this)">✓ Done</button>
+    </div>
+    <div class="card"><div class="card-body" id="t-list"></div></div>
+  </div>
+
+  <!-- CLIENTS -->
+  <div class="panel fi" id="panel-clients">
+    <div class="card"><div class="card-body" id="cl-list"></div></div>
+  </div>
+
+  <!-- PROJECTS -->
+  <div class="panel fi" id="panel-projects">
+    <div id="pj-list"></div>
+  </div>
+
+  <!-- FINANCE -->
+  <div class="panel fi" id="panel-finance">
+    <div class="sg" id="f-stats"></div>
+    <div class="card"><div class="card-head"><div class="card-title">Accounts</div></div><div class="card-body" id="f-accounts"></div></div>
+    <div class="card"><div class="card-head"><div class="card-title">Recent Transactions</div></div><div class="card-body" id="f-txns"></div></div>
+    <div class="card"><div class="card-head"><div class="card-title">Subscriptions</div></div><div class="card-body" id="f-subs"></div></div>
+  </div>
+
+  <!-- CALENDAR -->
+  <div class="panel fi" id="panel-calendar">
+    <div class="card"><div class="card-head"><div class="card-title">All Upcoming Events</div></div><div class="card-body" id="cal-list"></div></div>
+  </div>
+</div>
+
+<script>
+var SB_URL='https://raihywkpunxycrlnokra.supabase.co';
+var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhaWh5d2twdW54eWNybG5va3JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1ODY1MTMsImV4cCI6MjA4OTE2MjUxM30.kiNzw7FZiGiTyOK6R0t7zZXaKtq0Z5252sJAkNSKmtI';
+var D={};var taskFilter='all';var TODAY=new Date().toISOString().slice(0,10);
+
+var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function fmtDate(ds){if(!ds)return'';var p=ds.split('-');return MONTHS[parseInt(p[1])-1].slice(0,3)+' '+parseInt(p[2]);}
+function stTag(s){return({active:'tok',new:'tbl',complete:'tnn',paid:'tok',partial:'twn',unpaid:'ter',pending:'twn'}[s]||'tnn');}
+function payIco(s){return({paid:'✓',partial:'◑',unpaid:'✗',pending:'…'}[s]||'');}
+function daysUntil(ds){return Math.ceil((new Date(ds)-new Date(TODAY))/(1000*60*60*24));}
+
+async function loadData(){
+  try{
+    var r=await fetch(SB_URL+'/rest/v1/kopit_data?id=eq.kais_helwani_main&select=data,updated_at',{
+      headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,Accept:'application/vnd.pgrst.object+json'}
+    });
+    var row=await r.json();
+    if(row&&row.data){
+      D=JSON.parse(row.data);
+      var t=new Date(row.updated_at);
+      document.getElementById('sync-time').textContent=t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    }
+    document.getElementById('loader').style.display='none';
+    document.getElementById('shell').style.display='block';
+    renderAll();
+  }catch(e){
+    document.getElementById('loader').innerHTML='<div class="loader-logo">KP</div><div class="loader-text" style="color:var(--er)">Failed to load. Check connection.</div>';
+  }
+}
+
+function nav(p,btn){
+  document.querySelectorAll('.panel').forEach(function(e){e.classList.remove('on');});
+  var pan=document.getElementById('panel-'+p);if(pan)pan.classList.add('on');
+  document.querySelectorAll('.tab').forEach(function(e){e.classList.remove('on');});
+  if(btn)btn.classList.add('on');
+  var renders={dash:renderDash,tasks:renderTasks,clients:renderClients,projects:renderProjects,finance:renderFinance,calendar:renderCalendar};
+  if(renders[p])renders[p]();
+}
+
+function renderAll(){renderDash();renderTasks();renderClients();renderProjects();renderFinance();renderCalendar();}
+
+function renderDash(){
+  var open=(D.tasks||[]).filter(function(t){return !t.done;});
+  var bal=(D.accounts||[]).reduce(function(s,a){return s+a.balance;},0);
+  var activeP=(D.projects||[]).filter(function(p){return p.status==='active'||p.status==='new';});
+  document.getElementById('d-stats').innerHTML=
+    '<div class="sc"><div class="sl">Tasks</div><div class="sv">'+open.length+'</div><div class="ss wn">'+open.filter(function(t){return t.p==='high';}).length+' high</div></div>'+
+    '<div class="sc"><div class="sl">Projects</div><div class="sv">'+activeP.length+'</div><div class="ss">active</div></div>'+
+    '<div class="sc"><div class="sl">Clients</div><div class="sv">'+(D.clients||[]).length+'</div><div class="ss up">total</div></div>'+
+    '<div class="sc"><div class="sl">Balance</div><div class="sv" style="color:var(--ok);font-size:16px">$'+bal.toLocaleString()+'</div><div class="ss up">all accounts</div></div>';
+
+  // Focus
+  var ft=(D.tasks||[]).find(function(t){return t.id===D.focusId;});
+  if(!ft)ft=(D.tasks||[]).find(function(t){return !t.done;});
+  document.getElementById('d-focus').innerHTML=
+    '<div class="focus-lbl"><span class="focus-dot"></span>Current Focus</div>'+
+    '<div class="focus-text">'+(ft?ft.text:'No active task')+'</div>';
+
+  // Alerts
+  var alerts='';
+  (D.projects||[]).filter(function(p){return p.status==='active'||p.status==='new';}).forEach(function(p){
+    var d=daysUntil(p.deadline);
+    if(d<=14){var cls=d<=2?'urg':d<=7?'warn':'ok';alerts+='<div class="alert '+cls+'">📂 '+p.name+' — '+(d<=0?'Overdue':d===1?'Due tomorrow':'In '+d+'d')+'</div>';}
+  });
+  (D.subscriptions||[]).filter(function(s){return s.active;}).forEach(function(s){
+    var d=daysUntil(s.nextCharge);
+    if(d>=0&&d<=7)alerts+='<div class="alert warn">🔄 '+s.name+' $'+s.amount.toFixed(2)+' in '+d+'d</div>';
+  });
+  document.getElementById('d-alerts').innerHTML=alerts||'<div class="empty">No alerts ✓</div>';
+
+  // Events
+  var evs=(D.events||[]).filter(function(e){return e.date>=TODAY;}).slice(0,4);
+  document.getElementById('d-events').innerHTML=evs.length?evs.map(function(e){
+    return '<div class="ev-item"><div class="ev-bar" style="background:'+e.color+'"></div><div class="ev-main"><div class="ev-title">'+e.title+'</div><div class="ev-time">'+fmtDate(e.date)+(e.time?' · '+e.time:'')+'</div></div></div>';
+  }).join(''):'<div class="empty">No upcoming events</div>';
+
+  // Projects
+  document.getElementById('d-projects').innerHTML=activeP.slice(0,3).map(function(p){
+    return '<div class="row"><div class="row-main"><div class="row-title">'+p.name+'</div><div class="row-sub">'+p.client+' · Due '+fmtDate(p.deadline)+'</div><div class="prog"><div class="pf" style="width:'+p.progress+'%;background:'+p.color+'"></div></div></div><div class="row-val" style="color:var(--txt3)">'+p.progress+'%</div></div>';
+  }).join('')||'<div class="empty">No active projects</div>';
+}
+
+function filterTasks(f,btn){
+  taskFilter=f;
+  document.querySelectorAll('#panel-tasks .tag').forEach(function(b){b.className='tag tnn';b.style.cssText='cursor:pointer;padding:6px 12px;font-size:12px';});
+  if(btn){btn.className='tag tok';btn.style.cssText='cursor:pointer;padding:6px 12px;font-size:12px';}
+  renderTasks();
+}
+
+function renderTasks(){
+  var tasks=D.tasks||[];
+  if(taskFilter==='high')tasks=tasks.filter(function(t){return t.p==='high'&&!t.done;});
+  else if(taskFilter==='medium')tasks=tasks.filter(function(t){return t.p==='medium'&&!t.done;});
+  else if(taskFilter==='done')tasks=tasks.filter(function(t){return t.done;});
+  else tasks=tasks.filter(function(t){return !t.done;});
+  var icons={high:'🔴',medium:'🟡',low:'🟢'};
+  document.getElementById('t-list').innerHTML=tasks.length?tasks.map(function(t){
+    return '<div class="row"><span style="font-size:14px;flex-shrink:0">'+icons[t.p]+'</span><div class="row-main"><div class="row-title'+(t.done?' done':'')+'">'+t.text+'</div>'+(t.project?'<div class="row-sub">'+t.project+'</div>':'')+'</div>'+(t.done?'<span class="tag tok" style="font-size:10px">done</span>':'')+'</div>';
+  }).join(''):'<div class="empty">No tasks here ✓</div>';
+}
+
+function renderClients(){
+  var clients=D.clients||[];
+  document.getElementById('cl-list').innerHTML=clients.length?clients.map(function(c){
+    return '<div class="row"><div style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:'+c.color+';color:'+c.txt+';flex-shrink:0">'+c.ini+'</div><div class="row-main"><div class="row-title">'+c.name+'</div><div class="row-sub">'+c.contact+' · '+c.payMethod+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-weight:600;font-size:13px;color:var(--ok)">$'+c.revenue.toLocaleString()+'</div><span class="tag '+stTag(c.payStatus)+'" style="font-size:10px">'+payIco(c.payStatus)+' '+c.payStatus+'</span></div></div>';
+  }).join(''):'<div class="empty">No clients yet</div>';
+}
+
+function renderProjects(){
+  var projects=D.projects||[];
+  document.getElementById('pj-list').innerHTML=projects.length?projects.map(function(p){
+    return '<div class="card" style="border-top:2px solid '+p.color+';margin-bottom:10px"><div class="card-body"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><div style="font-size:14px;font-weight:700">'+p.name+'</div><div style="font-size:11px;color:var(--txt3)">'+p.client+'</div></div><span class="tag '+stTag(p.status)+'">'+p.status+'</span></div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:var(--txt3)">Budget: <b style="color:var(--ok)">$'+p.budget.toLocaleString()+'</b></span><span style="color:var(--txt3)">Due: '+fmtDate(p.deadline)+'</span></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span class="tag '+stTag(p.payStatus)+'" style="font-size:10px">'+payIco(p.payStatus)+' '+p.payStatus+'</span><span style="font-size:12px;color:var(--txt3)">'+p.progress+'%</span></div><div class="prog"><div class="pf" style="width:'+p.progress+'%;background:'+p.color+'"></div></div></div></div>';
+  }).join(''):'<div class="empty">No projects yet</div>';
+}
+
+function renderFinance(){
+  var accounts=D.accounts||[];var expenses=D.expenses||[];var subs=D.subscriptions||[];
+  var total=accounts.reduce(function(s,a){return s+a.balance;},0);
+  var income=expenses.filter(function(e){return e.type==='in';}).reduce(function(s,e){return s+e.amount;},0);
+  var out=Math.abs(expenses.filter(function(e){return e.type==='out';}).reduce(function(s,e){return s+e.amount;},0));
+  document.getElementById('f-stats').innerHTML=
+    '<div class="sc"><div class="sl">Income</div><div class="sv" style="color:var(--ok);font-size:16px">$'+income.toFixed(0)+'</div></div>'+
+    '<div class="sc"><div class="sl">Expenses</div><div class="sv" style="color:var(--er);font-size:16px">$'+out.toFixed(0)+'</div></div>'+
+    '<div class="sc"><div class="sl">Net</div><div class="sv" style="color:'+(income-out>=0?'var(--ok)':'var(--er)')+';font-size:16px">$'+(income-out).toFixed(0)+'</div></div>'+
+    '<div class="sc"><div class="sl">Total Balance</div><div class="sv" style="color:var(--ok);font-size:15px">$'+total.toLocaleString()+'</div></div>';
+  document.getElementById('f-accounts').innerHTML=accounts.map(function(a){
+    return '<div class="acc-card" style="border-top-color:'+a.color+'"><div style="display:flex;justify-content:space-between;align-items:center"><div style="display:flex;gap:9px;align-items:center"><span style="font-size:20px">'+a.icon+'</span><div><div style="font-weight:600">'+a.name+'</div><div style="font-size:11px;color:var(--txt3)">'+a.bank+'</div></div></div><div style="font-family:var(--mono);font-size:16px;font-weight:700">$'+a.balance.toLocaleString()+'</div></div></div>';
+  }).join('');
+  document.getElementById('f-txns').innerHTML=[].concat(expenses).reverse().slice(0,12).map(function(e){
+    return '<div class="row"><span style="font-size:18px">'+e.icon+'</span><div class="row-main"><div class="row-title">'+e.name+'</div><div class="row-sub">'+e.date+' · '+e.cat+'</div></div><div class="row-val" style="color:'+(e.type==='in'?'var(--ok)':'var(--er)')+'">'+(e.type==='in'?'+':'−')+'$'+Math.abs(e.amount).toFixed(2)+'</div></div>';
+  }).join('')||'<div class="empty">No transactions</div>';
+  var subTotal=subs.filter(function(s){return s.active;}).reduce(function(s,sub){return s+sub.amount;},0);
+  document.getElementById('f-subs').innerHTML='<div style="font-size:12px;color:var(--txt3);margin-bottom:10px;font-family:var(--mono)">$'+subTotal.toFixed(2)+'/month total</div>'+subs.map(function(s){
+    return '<div class="row"><span style="font-size:18px">'+s.icon+'</span><div class="row-main"><div class="row-title">'+s.name+'</div><div class="row-sub">'+s.cycle+' · Next: '+fmtDate(s.nextCharge)+'</div></div><div class="row-val" style="color:var(--er)">$'+s.amount.toFixed(2)+'</div></div>';
+  }).join('')||'<div class="empty">No subscriptions</div>';
+}
+
+function renderCalendar(){
+  var evs=(D.events||[]).filter(function(e){return e.date>=TODAY;}).sort(function(a,b){return a.date.localeCompare(b.date);});
+  document.getElementById('cal-list').innerHTML=evs.length?evs.map(function(e){
+    var d=daysUntil(e.date);var badge=d===0?'Today':d===1?'Tomorrow':'In '+d+'d';
+    return '<div class="ev-item"><div class="ev-bar" style="background:'+e.color+'"></div><div class="ev-main"><div class="ev-title">'+e.title+'</div><div class="ev-time">'+fmtDate(e.date)+(e.time?' · '+e.time:'')+'</div></div><span class="tag '+(d<=1?'ter':d<=3?'twn':'tok')+'" style="font-size:10px">'+badge+'</span></div>';
+  }).join(''):'<div class="empty">No upcoming events</div>';
+}
+
+// Auto-refresh every 30 seconds
+setInterval(function(){
+  loadData();
+}, 30000);
+
+// Start
+loadData();
+</script>
+</body>
+</html>
