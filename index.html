@@ -379,6 +379,8 @@ window.supabase = {
   <div class="ni" onclick="nav('crypto')"><span class="nic">₿</span><span>Crypto</span></div>
   <div class="ni" onclick="nav('news')"><span class="nic">📰</span><span>News Feed</span></div>
   <div class="ni" onclick="nav('sync')"><span class="nic">☁</span><span>Cloud Sync</span><span class="nbadge" id="sync-badge" style="display:none">!</span></div>
+  <div class="ni" onclick="nav('briefing')"><span class="nic">☀️</span><span>Daily Briefing</span></div>
+  <div class="ni" onclick="nav('apicost')"><span class="nic">💸</span><span>API Cost</span></div>
   <div class="ni" onclick="nav('chat')"><span class="nic">💬</span><span>KoPit AI</span></div>
   <div class="sbot">
     <div class="ucard">
@@ -802,6 +804,80 @@ create policy "allow all" on kopit_data
       </div>
     </div>
 
+    <!-- DAILY BRIEFING -->
+    <div class="panel fi" id="panel-briefing">
+      <div class="g2" style="align-items:start;margin-bottom:14px">
+        <div class="vs">
+          <div class="card">
+            <div class="ch">
+              <div class="ct">🌙 Night Check-In</div>
+              <div style="font-size:11px;color:var(--txt3);font-family:var(--mono)" id="brief-goals-status">Not set</div>
+            </div>
+            <div class="cb">
+              <div style="font-size:13px;color:var(--txt2);margin-bottom:10px;line-height:1.6">What do you want to finish tomorrow? Tell me anything — I'll turn it into your morning briefing.</div>
+              <textarea id="brief-goals-input" placeholder="e.g. Finish the HUD icons, reply to client, invoice Stormgate…" style="width:100%;min-height:100px;font-size:13px;line-height:1.6;resize:vertical"></textarea>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn bp" style="flex:1" onclick="saveBriefingGoals()">💾 Save Goals</button>
+                <button class="btn bg" onclick="clearBriefingGoals()">✕ Clear</button>
+              </div>
+              <div style="margin-top:12px;padding:10px 12px;border-radius:var(--r);background:var(--sur2);border:1px solid var(--brd)">
+                <div style="font-size:10px;font-weight:600;color:var(--txt3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Auto-push time</div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="time" id="brief-time" value="08:00" style="width:110px;font-size:13px;padding:6px 10px">
+                  <button class="btn bp bsm" onclick="saveBriefingTime()">Set Time</button>
+                  <span style="font-size:11px;color:var(--txt3);font-family:var(--mono)" id="brief-time-status"></span>
+                </div>
+                <div style="font-size:11px;color:var(--txt3);margin-top:6px">Requires KoPit Bot running in tray</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="ch"><div class="ct">Quick Actions</div></div>
+            <div class="cb" style="display:flex;flex-direction:column;gap:7px">
+              <button class="btn bp" style="width:100%;text-align:left;padding:10px 14px" onclick="generateBriefingNow()">⚡ Generate Briefing Now <span style="float:right;font-size:11px;color:var(--ok-txt);opacity:.7">Gemini AI</span></button>
+              <button class="btn bg" style="width:100%;text-align:left;padding:10px 14px" onclick="copyBriefing()">📋 Copy Last Briefing</button>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="min-height:400px">
+          <div class="ch">
+            <div class="ct">☀️ Morning Briefing</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div id="brief-gen-dot" style="width:6px;height:6px;border-radius:50%;background:var(--txt3)"></div>
+              <span style="font-size:11px;color:var(--txt3);font-family:var(--mono)" id="brief-gen-label">Not generated</span>
+            </div>
+          </div>
+          <div class="cb" style="position:relative">
+            <div id="brief-loading" style="display:none;text-align:center;padding:40px;color:var(--txt3)">
+              <div style="font-size:24px;margin-bottom:10px;animation:slowPulse 1.5s ease-in-out infinite">⏳</div>
+              <div style="font-size:13px">Asking AI, reading your KoPit data...</div>
+            </div>
+            <div id="brief-output" style="font-size:13px;color:var(--txt2);line-height:1.9;white-space:pre-wrap;min-height:320px">
+              <div style="text-align:center;padding:60px 20px;color:var(--txt3)">
+                <div style="font-size:32px;margin-bottom:12px">☀️</div>
+                <div style="font-size:14px;font-weight:600;color:var(--txt2);margin-bottom:6px">No briefing yet</div>
+                <div style="font-size:12px">Set your goals tonight, then hit Generate — or wait for auto-push.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct">What's Included in Your Briefing</div></div>
+        <div class="cb">
+          <div class="g4">
+            <div style="text-align:center;padding:10px"><div style="font-size:20px;margin-bottom:4px">🎯</div><div style="font-size:12px;color:var(--txt2);font-weight:600">AI Tasks</div><div style="font-size:11px;color:var(--txt3)">From your night goals</div></div>
+            <div style="text-align:center;padding:10px"><div style="font-size:20px;margin-bottom:4px">📅</div><div style="font-size:12px;color:var(--txt2);font-weight:600">Calendar</div><div style="font-size:11px;color:var(--txt3)">Today's events</div></div>
+            <div style="text-align:center;padding:10px"><div style="font-size:20px;margin-bottom:4px">💰</div><div style="font-size:12px;color:var(--txt2);font-weight:600">Finance Pulse</div><div style="font-size:11px;color:var(--txt3)">Income this month</div></div>
+            <div style="text-align:center;padding:10px"><div style="font-size:20px;margin-bottom:4px">⚠️</div><div style="font-size:12px;color:var(--txt2);font-weight:600">Deadlines</div><div style="font-size:11px;color:var(--txt3)">This week's risks</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- API COST -->
+    <div class="panel fi" id="panel-apicost"></div>
+
     <!-- NEWS FEED -->
     <div class="panel fi" id="panel-news">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -930,7 +1006,7 @@ const DEF={
 };
 
 function loadS(){try{const r=localStorage.getItem(STORE);if(r){const d=JSON.parse(r);return Object.assign({},DEF,d,{calDate:new Date(2026,2,1),selDate:TODAY,timer:{running:false,secs:0,iv:null,alarmSecs:0},pomo:{running:false,secs:1500,iv:null,phase:'work',sessions:0,totalSecs:0},taskFilter:'all',clientFilter:'all',selNote:null,widgetVisible:false})}}catch(e){}return Object.assign({},DEF,{calDate:new Date(2026,2,1),selDate:TODAY});}
-function save(){try{localStorage.setItem(STORE,JSON.stringify({tasks:S.tasks,clients:S.clients,stocks:S.stocks||[],crypto:S.crypto||[],projects:S.projects,events:S.events,notes:S.notes,expenses:S.expenses,subscriptions:S.subscriptions,accounts:S.accounts,goals:S.goals,heatmapData:S.heatmapData,revenueData:S.revenueData,focusId:S.focusId,nid:S.nid,chartType:S.chartType}))}catch(e){}}
+function save(){try{localStorage.setItem(STORE,JSON.stringify({tasks:S.tasks,clients:S.clients,stocks:S.stocks||[],crypto:S.crypto||[],projects:S.projects,events:S.events,notes:S.notes,expenses:S.expenses,subscriptions:S.subscriptions,accounts:S.accounts,goals:S.goals,heatmapData:S.heatmapData,revenueData:S.revenueData,focusId:S.focusId,nid:S.nid,chartType:S.chartType,night_goals:S.night_goals||'',goals_set_at:S.goals_set_at||'',briefing_hour:S.briefing_hour||8,briefing_minute:S.briefing_minute||0}))}catch(e){}}
 let S=loadS();
 
 // THEME// THEME// THEME
@@ -944,7 +1020,7 @@ function tick(){const d=new Date();document.getElementById('clk').textContent=St
 setInterval(tick,15000);tick();
 
 // NAV
-function nav(p){document.querySelectorAll('.panel').forEach(e=>e.classList.remove('on'));document.querySelectorAll('.ni').forEach(e=>e.classList.remove('on'));const pan=document.getElementById('panel-'+p);if(pan)pan.classList.add('on');const T={dashboard:'Dashboard',tasks:'Tasks',clients:'Clients',projects:'Projects',timeline:'Timeline',expenses:'Expenses',subscriptions:'Subscriptions',accounts:'Accounts',pomodoro:'Pomodoro',goals:'Daily Goals',weekly:'Weekly Review',calendar:'Calendar',notes:'Notes',socials:'Socials',sync:'Cloud Sync',chat:'KoPit Assistant'};document.getElementById('tbtit').textContent=T[p]||p;document.querySelectorAll('.ni').forEach(e=>{if(e.getAttribute('onclick')==="nav('"+p+"')")e.classList.add('on')});const rr={dashboard:renderDash,tasks:renderTasks,clients:renderClients,projects:renderProjects,timeline:renderTimeline,expenses:renderExpenses,subscriptions:renderSubs,accounts:renderAccounts,pomodoro:renderPomo,goals:renderGoals,weekly:renderWeekly,calendar:renderCalendar,notes:renderNotes,socials:renderSocials,sync:renderSync,chat:renderChat,stocks:renderStocks,crypto:renderCrypto,news:renderNewsPage};rr[p]?.();}
+function nav(p){document.querySelectorAll('.panel').forEach(e=>e.classList.remove('on'));document.querySelectorAll('.ni').forEach(e=>e.classList.remove('on'));const pan=document.getElementById('panel-'+p);if(pan)pan.classList.add('on');const T={dashboard:'Dashboard',tasks:'Tasks',clients:'Clients',projects:'Projects',timeline:'Timeline',expenses:'Expenses',subscriptions:'Subscriptions',accounts:'Accounts',pomodoro:'Pomodoro',goals:'Daily Goals',weekly:'Weekly Review',calendar:'Calendar',notes:'Notes',socials:'Socials',sync:'Cloud Sync',briefing:'Daily Briefing',apicost:'API Cost',chat:'KoPit Assistant'};document.getElementById('tbtit').textContent=T[p]||p;document.querySelectorAll('.ni').forEach(e=>{if(e.getAttribute('onclick')==="nav('"+p+"')")e.classList.add('on')});const rr={dashboard:renderDash,tasks:renderTasks,clients:renderClients,projects:renderProjects,timeline:renderTimeline,expenses:renderExpenses,subscriptions:renderSubs,accounts:renderAccounts,pomodoro:renderPomo,goals:renderGoals,weekly:renderWeekly,calendar:renderCalendar,notes:renderNotes,socials:renderSocials,sync:renderSync,briefing:renderBriefingPanel,apicost:renderCostPanel,chat:renderChat,stocks:renderStocks,crypto:renderCrypto,news:renderNewsPage};rr[p]?.();}
 
 // TIMER
 const pad=n=>String(n).padStart(2,'0');const fmtS=s=>pad(Math.floor(s/3600))+':'+pad(Math.floor((s%3600)/60))+':'+pad(s%60);
@@ -2162,6 +2238,334 @@ function renderNews(){
       <div style="font-size:14px;font-weight:600;line-height:1.4;margin-bottom:7px;color:var(--txt)">${n.title}</div>
       <div style="font-size:12px;color:var(--txt2);line-height:1.5">${n.summary}</div>
     </div>`).join('');
+}
+
+
+// ════ DAILY BRIEFING ════
+const GEMINI_KEY = 'AIzaSyB5MGm3GXNTQHWezgrz47CJePQ4KjPzziE';
+const BRIEF_STORE = 'kopit_briefing_v1';
+
+function loadBriefingState(){
+  try{return JSON.parse(localStorage.getItem(BRIEF_STORE)||'{}');}catch{return {};}
+}
+function saveBriefingState(st){
+  localStorage.setItem(BRIEF_STORE, JSON.stringify(st));
+}
+
+function renderBriefingPanel(){
+  const st = loadBriefingState();
+  const goalsInput = document.getElementById('brief-goals-input');
+  const goalsStatus = document.getElementById('brief-goals-status');
+  const timeInput = document.getElementById('brief-time');
+  const timeStatus = document.getElementById('brief-time-status');
+  const output = document.getElementById('brief-output');
+  const dot = document.getElementById('brief-gen-dot');
+  const label = document.getElementById('brief-gen-label');
+
+  if(goalsInput && st.night_goals){
+    goalsInput.value = st.night_goals;
+    if(goalsStatus) goalsStatus.textContent = 'Goals saved ✓';
+  }
+  if(timeInput && st.briefing_time){
+    timeInput.value = st.briefing_time;
+  }
+  if(timeStatus && st.briefing_time){
+    timeStatus.textContent = 'Push at ' + st.briefing_time;
+  }
+  if(output && st.last_briefing){
+    output.textContent = st.last_briefing;
+    if(dot){ dot.style.background = 'var(--ok-txt)'; }
+    if(label && st.last_briefing_time){ label.textContent = 'Generated ' + st.last_briefing_time; }
+  }
+}
+
+async function pushStateToSupabase(stateData){
+  // Write goals into S (main KoPit state) then use the existing syncSave() path
+  // This is the exact same route all other KoPit data uses — guaranteed to work
+  S.night_goals     = stateData.night_goals     || '';
+  S.goals_set_at    = stateData.goals_set_at    || '';
+  S.briefing_hour   = stateData.briefing_hour   || 8;
+  S.briefing_minute = stateData.briefing_minute || 0;
+  // Save locally first
+  save();
+  // Then push to Supabase using the existing proven function
+  try{
+    if(!sbClient){ initSupabase(); }
+    if(sbClient){
+      await sbClient.from(SB_TABLE).upsert({
+        id: SB_ROW_ID,
+        data: JSON.stringify(Object.assign({}, S, {savedAt: new Date().toISOString()})),
+        updated_at: new Date().toISOString()
+      });
+      return true;
+    }
+    return false;
+  }catch(e){
+    console.error('State sync failed:', e);
+    return false;
+  }
+}
+
+async function saveBriefingGoals(){
+  const input = document.getElementById('brief-goals-input');
+  if(!input || !input.value.trim()){
+    showToast('⚠','Empty Goals','Type your goals first.','warn'); return;
+  }
+  const st = loadBriefingState();
+  st.night_goals = input.value.trim();
+  st.goals_set_at = new Date().toISOString();
+  // Parse briefing time into hour/minute for bot
+  const timeVal = (document.getElementById('brief-time')||{value:'08:00'}).value || '08:00';
+  const timeParts = timeVal.split(':');
+  st.briefing_hour   = parseInt(timeParts[0])||8;
+  st.briefing_minute = parseInt(timeParts[1])||0;
+  saveBriefingState(st);
+  const status = document.getElementById('brief-goals-status');
+  if(status) status.textContent = 'Saving...';
+  // Push to Supabase so the bot sees it
+  const ok = await pushStateToSupabase(st);
+  if(status) status.textContent = ok ? 'Saved to cloud ✓' : 'Saved locally ✓';
+  showToast('🌙', 'Goals Saved', ok ? 'Synced to cloud — bot will brief you at '+timeVal : 'Saved locally. Open KoPit again to sync.', '');
+}
+
+async function clearBriefingGoals(){
+  const input = document.getElementById('brief-goals-input');
+  if(input) input.value = '';
+  const st = loadBriefingState();
+  st.night_goals = '';
+  saveBriefingState(st);
+  await pushStateToSupabase(st);
+  const status = document.getElementById('brief-goals-status');
+  if(status) status.textContent = 'Not set';
+  showToast('✓','Goals Cleared','','');
+}
+
+async function saveBriefingTime(){
+  const input = document.getElementById('brief-time');
+  if(!input) return;
+  const st = loadBriefingState();
+  st.briefing_time = input.value;
+  const timeParts = input.value.split(':');
+  st.briefing_hour   = parseInt(timeParts[0])||8;
+  st.briefing_minute = parseInt(timeParts[1])||0;
+  saveBriefingState(st);
+  const ok = await pushStateToSupabase(st);
+  const timeStatus = document.getElementById('brief-time-status');
+  if(timeStatus) timeStatus.textContent = ok ? 'Synced ✓' : 'Saved locally';
+  showToast('⏰','Time Set', 'Briefing at '+input.value+(ok?' — synced to cloud':''), '');
+}
+
+function copyBriefing(){
+  const st = loadBriefingState();
+  if(!st.last_briefing){ showToast('⚠','No Briefing','Generate one first.','warn'); return; }
+  navigator.clipboard.writeText(st.last_briefing).then(()=>{
+    showToast('📋','Copied','Briefing copied to clipboard.','');
+  });
+}
+
+// ════ API COST TRACKER ════
+const COST_STORE = 'kopit_api_cost_v1';
+function loadCostData(){ try{ return JSON.parse(localStorage.getItem(COST_STORE)||'{}'); }catch{ return {}; } }
+function saveCostData(d){ localStorage.setItem(COST_STORE, JSON.stringify(d)); }
+function trackApiCost(costUSD, inputTok, outputTok){
+  const d = loadCostData();
+  const today = new Date().toISOString().slice(0,10);
+  const month = today.slice(0,7);
+  if(!d.days) d.days = {};
+  if(!d.months) d.months = {};
+  if(!d.days[today]) d.days[today] = {cost:0,calls:0,inputTok:0,outputTok:0};
+  if(!d.months[month]) d.months[month] = {cost:0,calls:0,inputTok:0,outputTok:0};
+  d.days[today].cost += costUSD; d.days[today].calls += 1;
+  d.days[today].inputTok += inputTok; d.days[today].outputTok += outputTok;
+  d.months[month].cost += costUSD; d.months[month].calls += 1;
+  d.months[month].inputTok += inputTok; d.months[month].outputTok += outputTok;
+  saveCostData(d);
+}
+function renderCostPanel(){
+  const d = loadCostData();
+  const today = new Date().toISOString().slice(0,10);
+  const month = today.slice(0,7);
+  const td = (d.days||{})[today]||{cost:0,calls:0,inputTok:0,outputTok:0};
+  const md = (d.months||{})[month]||{cost:0,calls:0,inputTok:0,outputTok:0};
+  const days7 = [];
+  for(let i=6;i>=0;i--){
+    const dt=new Date(); dt.setDate(dt.getDate()-i);
+    const ds=dt.toISOString().slice(0,10);
+    const dd=(d.days||{})[ds]||{cost:0,calls:0};
+    days7.push({date:ds,label:dt.toLocaleDateString('en-US',{weekday:'short'}),cost:dd.cost,calls:dd.calls});
+  }
+  const maxCost = Math.max(...days7.map(function(x){return x.cost;}), 0.0001);
+  const el = document.getElementById('panel-apicost');
+  if(!el) return;
+  el.innerHTML =
+    '<div class="g2" style="margin-bottom:14px">'+
+      '<div class="card"><div class="ch"><div class="ct">Today</div><div style="font-size:10px;color:var(--txt3);font-family:var(--mono)">'+today+'</div></div>'+
+      '<div class="cb"><div style="font-size:28px;font-weight:700;color:var(--ok-txt);font-family:var(--mono)">$'+td.cost.toFixed(5)+'</div>'+
+      '<div style="font-size:12px;color:var(--txt3);margin-top:4px">'+td.calls+' calls · '+td.inputTok.toLocaleString()+' in / '+td.outputTok.toLocaleString()+' out tokens</div></div></div>'+
+      '<div class="card"><div class="ch"><div class="ct">This Month</div><div style="font-size:10px;color:var(--txt3);font-family:var(--mono)">'+month+'</div></div>'+
+      '<div class="cb"><div style="font-size:28px;font-weight:700;color:var(--ok-txt);font-family:var(--mono)">$'+md.cost.toFixed(4)+'</div>'+
+      '<div style="font-size:12px;color:var(--txt3);margin-top:4px">'+md.calls+' calls · '+md.inputTok.toLocaleString()+' in / '+md.outputTok.toLocaleString()+' out tokens</div></div></div>'+
+    '</div>'+
+    '<div class="card" style="margin-bottom:14px"><div class="ch"><div class="ct">Last 7 Days</div><div style="font-size:11px;color:var(--txt3);font-family:var(--mono)">Gemini 2.5 Flash Lite</div></div>'+
+    '<div class="cb"><div style="display:flex;align-items:flex-end;gap:8px;height:110px;padding-top:10px">'+
+    days7.map(function(x){
+      var h = Math.max(4, Math.round((x.cost/maxCost)*70));
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">'+
+        '<div style="font-size:9px;color:var(--txt3);font-family:var(--mono)">$'+x.cost.toFixed(4)+'</div>'+
+        '<div style="width:100%;background:rgba(45,106,79,'+(x.cost>0?'0.6':'0.12')+');border-radius:4px 4px 0 0;height:'+h+'px"></div>'+
+        '<div style="font-size:10px;color:var(--txt3);font-family:var(--mono)">'+x.label+'</div>'+
+        '<div style="font-size:9px;color:var(--txt3)">'+x.calls+'x</div></div>';
+    }).join('')+
+    '</div></div></div>'+
+    '<div class="card"><div class="ch"><div class="ct">Pricing — Gemini 2.5 Flash Lite</div></div>'+
+    '<div class="cb"><div class="g3">'+
+      '<div style="text-align:center;padding:12px;background:var(--sur2);border-radius:var(--r);border:1px solid var(--brd)"><div style="font-size:10px;color:var(--txt3);font-family:var(--mono);margin-bottom:5px">INPUT</div><div style="font-size:16px;font-weight:600;color:var(--txt)">$0.075</div><div style="font-size:10px;color:var(--txt3)">per 1M tokens</div></div>'+
+      '<div style="text-align:center;padding:12px;background:var(--sur2);border-radius:var(--r);border:1px solid var(--brd)"><div style="font-size:10px;color:var(--txt3);font-family:var(--mono);margin-bottom:5px">OUTPUT</div><div style="font-size:16px;font-weight:600;color:var(--txt)">$0.30</div><div style="font-size:10px;color:var(--txt3)">per 1M tokens</div></div>'+
+      '<div style="text-align:center;padding:12px;background:var(--sur2);border-radius:var(--r);border:1px solid var(--brd)"><div style="font-size:10px;color:var(--txt3);font-family:var(--mono);margin-bottom:5px">PER BRIEFING</div><div style="font-size:16px;font-weight:600;color:var(--ok-txt)">~$0.0003</div><div style="font-size:10px;color:var(--txt3)">avg estimate</div></div>'+
+    '</div>'+
+    '<div style="padding:10px 17px;border-top:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center">'+
+      '<span style="font-size:12px;color:var(--txt3)">Reset all cost history</span>'+
+      '<button class="btn bdg bsm" onclick="localStorage.removeItem(\'' + COST_STORE + '\');renderCostPanel();">Reset</button>'+
+    '</div></div></div>';
+}
+
+async function generateBriefingNow(){
+  const loading = document.getElementById('brief-loading');
+  const output  = document.getElementById('brief-output');
+  const dot     = document.getElementById('brief-gen-dot');
+  const label   = document.getElementById('brief-gen-label');
+  if(loading) loading.style.display = 'block';
+  if(output)  output.style.display  = 'none';
+  if(dot)     dot.style.background  = 'var(--wn-txt)';
+  if(label)   label.textContent     = 'Generating...';
+
+  const st          = loadBriefingState();
+  const night_goals = st.night_goals || '';
+  const today       = new Date().toISOString().slice(0,10);
+  const todayFmt    = new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  let kd = {};
+  try{ kd = JSON.parse(localStorage.getItem(STORE)||'{}'); }catch{}
+
+  const openTasks      = (kd.tasks||[]).filter(function(t){return !t.done;});
+  const highTasks      = openTasks.filter(function(t){return t.p==='high';});
+  const todayEvents    = (kd.events||[]).filter(function(e){return e.date===today;}).sort(function(a,b){return (a.time||'').localeCompare(b.time||'');});
+  const upcoming       = (kd.events||[]).filter(function(e){return e.date>today;}).sort(function(a,b){return a.date.localeCompare(b.date);}).slice(0,3);
+  const activeProjects = (kd.projects||[]).filter(function(p){return p.status==='active';});
+  const expenses       = kd.expenses||[];
+  const incomeMonth    = expenses.filter(function(e){return e.type==='in'&&(e.date||'').slice(0,7)===today.slice(0,7);}).reduce(function(s,e){return s+(e.amount||0);},0);
+  const deadlines      = (kd.projects||[]).filter(function(p){return p.deadline>=today;}).sort(function(a,b){return a.deadline.localeCompare(b.deadline);}).slice(0,3);
+
+  function fmtDate(ds){if(!ds)return '';try{return new Date(ds+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});}catch{return ds;}}
+
+  const taskLines    = openTasks.slice(0,10).map(function(t){return '- ['+(t.p||'?').toUpperCase()+'] '+t.text;}).join('\n')||'- None';
+  const eventLines   = todayEvents.length?todayEvents.map(function(e){return '- '+(e.time||'')+' '+e.title;}).join('\n'):'- No events today';
+  const upLines      = upcoming.length?upcoming.map(function(e){return '- '+fmtDate(e.date)+' — '+e.title;}).join('\n'):'- None';
+  const projLines    = activeProjects.length?activeProjects.map(function(p){return '- '+p.name+' ('+(p.progress||0)+'% done, due '+fmtDate(p.deadline)+', $'+(p.budget||0)+')';}).join('\n'):'- None';
+  const dlLines      = deadlines.length?deadlines.map(function(p){return '- '+p.name+' due '+fmtDate(p.deadline);}).join('\n'):'- None';
+
+  const context =
+    'TODAY: '+todayFmt+'\n\n'+
+    'KAIS NIGHT GOALS:\n'+(night_goals||'Not set — use high priority tasks')+
+    '\n\nOPEN TASKS ('+openTasks.length+' total, '+highTasks.length+' HIGH):\n'+taskLines+
+    '\n\nTODAY EVENTS:\n'+eventLines+
+    '\n\nUPCOMING:\n'+upLines+
+    '\n\nACTIVE PROJECTS:\n'+projLines+
+    '\n\nDEADLINES:\n'+dlLines+
+    '\n\nINCOME THIS MONTH: $'+incomeMonth.toLocaleString('en-US',{minimumFractionDigits:2});
+
+  const prompt =
+    'You are Jarvis — sharp, direct, no-BS personal assistant for Kais Helwani, freelance Roblox UI designer in Dubai.\n'+
+    'Give him a laser-focused morning briefing that makes him want to attack the day immediately.\n\n'+
+    '\u26a0\ufe0f CRITICAL RULE — READ THIS FIRST:\n'+
+    'The NIGHT GOALS are what Kais himself wrote before going to sleep. They are HIGHEST priority.\n'+
+    'Task 1 and Task 2 in Today\'s Mission MUST come directly from his night goals — use his exact words made actionable.\n'+
+    'Only use KoPit tasks for Task 3 if needed, or if goals are empty.\n\n'+
+    'RULES:\n'+
+    '- Be direct. Talk like a sharp friend who knows his work.\n'+
+    '- The motivating line must reference his actual goals — not generic hype.\n'+
+    '- Under 35 lines total.\n\n'+
+    'FORMAT (Telegram markdown *bold* _italic_):\n\n'+
+    '\u2600\ufe0f *Good morning, Kais!*\n'+
+    '_[one punchy line referencing his specific goals today]_\n\n'+
+    '\U0001f3af *Today\'s Mission*\n'+
+    '1. [DIRECTLY from night goals — his exact intent made actionable]\n'+
+    '2. [DIRECTLY from night goals — his exact intent made actionable]\n'+
+    '3. [from night goals OR highest priority KoPit task]\n\n'+
+    '\U0001f4c5 *Schedule*\n'+
+    '[events with times, or "Clear day — full focus mode"]\n\n'+
+    '\u26a0\ufe0f *Watch Out*\n'+
+    '[2 lines max — deadlines or risks]\n\n'+
+    '\U0001f4b0 *Money Pulse*\n'+
+    '[income this month + one line about financial status]\n\n'+
+    '\u26a1 *One Thing*\n'+
+    '[THE single most important goal from his night goals — specific]\n\n'+
+    '---TASKS_JSON---\n'+
+    '[ONLY raw JSON array, no markdown, no backticks:\n'+
+    '[{"text":"goal 1 made actionable","p":"high"},{"text":"goal 2 made actionable","p":"high"},{"text":"goal 3 or KoPit task","p":"medium"}]]\n\n'+
+        'DATA:\n'+context;
+
+  try {
+    const result = await ipcRenderer.invoke('claude-briefing', prompt);
+    if(!result.ok){
+      if(loading) loading.style.display = 'none';
+      if(output){ output.style.display = 'block'; output.textContent = '❌ API Error: ' + result.error; }
+      if(dot) dot.style.background = 'var(--er-txt)';
+      if(label) label.textContent = 'Error';
+      showToast('❌','API Error', result.error, 'warn');
+      return;
+    }
+    const raw      = result.text;
+    const sep      = raw.indexOf('---TASKS_JSON---');
+    const briefTxt = sep !== -1 ? raw.slice(0, sep).trim() : raw.trim();
+    const tasksPart= sep !== -1 ? raw.slice(sep + 16).trim() : '';
+
+    // Auto-add tasks to KoPit task list
+    if(tasksPart){
+      try{
+        const arrStart = tasksPart.indexOf('[');
+        const arrEnd   = tasksPart.lastIndexOf(']');
+        if(arrStart !== -1 && arrEnd !== -1){
+          const parsed = JSON.parse(tasksPart.slice(arrStart, arrEnd+1));
+          if(Array.isArray(parsed) && parsed.length){
+            var added = 0;
+            parsed.forEach(function(t){
+              if(!t.text) return;
+              S.nid = (S.nid||500) + 1;
+              S.tasks.unshift({id:S.nid, text:'[Briefing] '+t.text, p:t.p||'high', done:false, project:'', tag:'Briefing'});
+              added++;
+            });
+            save();
+            if(sbClient){
+              sbClient.from(SB_TABLE).upsert({id:SB_ROW_ID, data:JSON.stringify(Object.assign({},S,{savedAt:new Date().toISOString()})), updated_at:new Date().toISOString()});
+            }
+            showToast('✓','Tasks Added', added+' briefing tasks added to your list.','');
+          }
+        }
+      }catch(e){ console.warn('Task parse failed:',e); }
+    }
+
+    // Track cost
+    const inTok  = Math.ceil(prompt.length / 4);
+    const outTok = Math.ceil(briefTxt.length / 4);
+    trackApiCost((inTok/1000000*0.075)+(outTok/1000000*0.30), inTok, outTok);
+
+    if(loading) loading.style.display = 'none';
+    if(output){ output.style.display = 'block'; output.textContent = briefTxt; }
+    if(dot) dot.style.background = 'var(--ok-txt)';
+    const now = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    if(label) label.textContent = 'Generated at ' + now;
+    const bst = loadBriefingState();
+    bst.last_briefing = briefTxt;
+    bst.last_briefing_time = now;
+    saveBriefingState(bst);
+    showToast('☀️','Briefing Ready','Your morning briefing is ready.','');
+  } catch(err) {
+    if(loading) loading.style.display = 'none';
+    if(output){ output.style.display = 'block'; output.textContent = '❌ Failed: ' + err.message; }
+    if(dot) dot.style.background = 'var(--er-txt)';
+    if(label) label.textContent = 'Error';
+    showToast('❌','AI Error', err.message, 'warn');
+  }
 }
 
 function renderNewsPage(){
