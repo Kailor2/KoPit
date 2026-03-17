@@ -294,6 +294,10 @@ select option{background:var(--sur2)}textarea{resize:vertical;min-height:70px}
 .chat-suggestion:hover{background:rgba(45,106,79,0.15);border-color:rgba(45,106,79,0.25);color:var(--txt)}
 
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--sur3);border-radius:2px}
+.asset-pick{padding:5px 8px;border-radius:6px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;font-size:11px;font-weight:600;font-family:var(--mono);color:var(--txt2);transition:var(--tr);text-align:center;user-select:none}
+.asset-pick:hover{background:var(--sur3);color:var(--txt);border-color:var(--brd2)}
+.asset-pick.selected{background:rgba(45,106,79,0.2);border-color:var(--acc-brd);color:var(--ok-txt)}
+.coin-pick{text-align:left;display:flex;align-items:center;gap:0}
 </style>
 <script>
 // Minimal Supabase client - no CDN needed
@@ -330,7 +334,6 @@ window.supabase = {
   }
 };
 </script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -589,7 +592,13 @@ window.supabase = {
     <!-- CALENDAR -->
     <div class="panel fi" id="panel-calendar">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px">
-        <div class="cal-views"><button class="cv-btn on" onclick="setCalView('month',this)">Month</button><button class="cv-btn" onclick="setCalView('week',this)">Week</button><button class="cv-btn" onclick="setCalView('day',this)">Day</button></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cal-views"><button class="cv-btn on" onclick="setCalView('month',this)">Month</button><button class="cv-btn" onclick="setCalView('week',this)">Week</button><button class="cv-btn" onclick="setCalView('day',this)">Day</button></div>
+          <button id="gcal-btn" class="btn bg bsm" onclick="gcalConnect()" style="display:flex;align-items:center;gap:5px">
+            <span style="font-size:13px">📅</span><span id="gcal-btn-txt">Connect Google</span>
+          </button>
+          <button id="gcal-sync-btn" class="btn bg bsm" onclick="gcalSync()" style="display:none">↻ Sync</button>
+        </div>
         <div style="display:flex;align-items:center;gap:7px">
           <button class="btn bg bsm" onclick="calMove(-1)">‹</button>
           <div style="font-size:14px;font-weight:700;color:var(--txt);min-width:155px;text-align:center" id="cal-label"></div>
@@ -921,7 +930,7 @@ const DEF={
 };
 
 function loadS(){try{const r=localStorage.getItem(STORE);if(r){const d=JSON.parse(r);return Object.assign({},DEF,d,{calDate:new Date(2026,2,1),selDate:TODAY,timer:{running:false,secs:0,iv:null,alarmSecs:0},pomo:{running:false,secs:1500,iv:null,phase:'work',sessions:0,totalSecs:0},taskFilter:'all',clientFilter:'all',selNote:null,widgetVisible:false})}}catch(e){}return Object.assign({},DEF,{calDate:new Date(2026,2,1),selDate:TODAY});}
-function save(){try{localStorage.setItem(STORE,JSON.stringify({tasks:S.tasks,clients:S.clients,stocks:S.stocks||[],crypto:S.crypto||[],projects:S.projects,events:S.events,notes:S.notes,expenses:S.expenses,subscriptions:S.subscriptions,accounts:S.accounts,goals:S.goals,heatmapData:S.heatmapData,revenueData:S.revenueData,stocks:S.stocks||[],crypto:S.crypto||[],focusId:S.focusId,nid:S.nid,chartType:S.chartType}))}catch(e){}}
+function save(){try{localStorage.setItem(STORE,JSON.stringify({tasks:S.tasks,clients:S.clients,stocks:S.stocks||[],crypto:S.crypto||[],projects:S.projects,events:S.events,notes:S.notes,expenses:S.expenses,subscriptions:S.subscriptions,accounts:S.accounts,goals:S.goals,heatmapData:S.heatmapData,revenueData:S.revenueData,focusId:S.focusId,nid:S.nid,chartType:S.chartType}))}catch(e){}}
 let S=loadS();
 
 // THEME// THEME// THEME
@@ -958,12 +967,36 @@ function showToast(ico,title,sub,type){const w=document.getElementById('toast-wr
 // FLOAT WIDGET
 function toggleWidget(){
   S.widgetVisible=!S.widgetVisible;
-  document.getElementById('fwid').style.display=S.widgetVisible?'block':'none';
+  if(S.widgetVisible){
+    // Open the always-on-top float window
+    ipcRenderer.send('open-float');
+    // Send current focus data
+    setTimeout(sendFloatData, 200);
+  } else {
+    ipcRenderer.send('close-float');
+  }
+  // Also keep the in-app widget for when app is visible
+  var fw=document.getElementById('fwid');
+  if(fw)fw.style.display=S.widgetVisible?'block':'none';
   localStorage.setItem('kopit_widget_visible', S.widgetVisible?'1':'0');
+}
+function sendFloatData(){
+  var task=S.focusId?((S.tasks.find(function(t){return t.id===S.focusId;})||{}).text||'No task set'):'No focus task set';
+  ipcRenderer.send('float-data',{task:task,secs:S.timer.secs,running:S.timer.running});
 }
 function restoreWidget(){
   const v=localStorage.getItem('kopit_widget_visible');
-  if(v==='1'){S.widgetVisible=true;document.getElementById('fwid').style.display='block';}
+  if(v==='1'){
+    S.widgetVisible=true;
+    var fw=document.getElementById('fwid');
+    if(fw)fw.style.display='block';
+    ipcRenderer.send('open-float');
+    setTimeout(sendFloatData,300);
+  }
+}
+// Keep float window in sync when focus changes
+function syncFloatWindow(){
+  if(S.widgetVisible)sendFloatData();
 }
 (()=>{let ox=18,oy=18,sx,sy,drag=false;document.addEventListener('mousedown',e=>{const w=document.getElementById('fwid');if(!w||!w.contains(e.target)||e.target.tagName==='BUTTON')return;drag=true;ox=parseInt(w.style.right||'18');oy=parseInt(w.style.bottom||'18');sx=e.clientX;sy=e.clientY;});document.addEventListener('mousemove',e=>{if(!drag)return;const w=document.getElementById('fwid');if(w){w.style.right=(ox-(e.clientX-sx))+'px';w.style.bottom=(oy+(e.clientY-sy))+'px'}});document.addEventListener('mouseup',()=>{drag=false;});})();
 
@@ -975,6 +1008,8 @@ function daysUntil(ds){return Math.ceil((new Date(ds)-new Date(TODAY))/(1000*60*
 function syncFocus(){const t=S.tasks.find(t=>t.id===S.focusId);if(t){const sh=t.text.length>45?t.text.slice(0,45)+'…':t.text;['fw1','fw2','wgt-task'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=sh;});}}
 
 // DASHBOARD
+  syncFloatWindow();
+
 function renderDash(){
   const open=S.tasks.filter(t=>!t.done);
   document.getElementById('sd-t').textContent=open.length;
@@ -999,12 +1034,34 @@ else if(S.chartType==='bar'){const bw=(w-40)/12-3;el.innerHTML=`<svg width="${w}
 else{const total=data.reduce((a,b)=>a+b,0);const cx=w/2,cy=h/2,r=Math.min(h/2-12,65);let angle=-Math.PI/2;const cols=['rgba(45,106,79,.7)','rgba(40,74,122,.7)','rgba(80,40,80,.7)','rgba(122,92,40,.7)','rgba(122,40,56,.7)','rgba(45,80,60,.6)','rgba(30,60,90,.6)','rgba(60,30,80,.6)','rgba(80,60,30,.6)','rgba(60,80,30,.6)','rgba(30,80,60,.6)','rgba(50,50,80,.6)'];const slices=data.map((v,i)=>{const sl=v/total*Math.PI*2;const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);angle+=sl;const x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);const lg=sl>Math.PI?1:0;return`<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${lg},1 ${x2},${y2} Z" fill="${cols[i%cols.length]}"/>`;});el.innerHTML=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${slices.join('')}<text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--txt)" font-family="var(--mono)">$${Math.round(total/12/100)*100}/mo</text></svg>`;}}
 
 // HEATMAP
-function renderHeatmap(){const el=document.getElementById('heatmap-wrap');if(!el)return;const hours=['9am','11am','1pm','3pm','5pm','7pm'];const days=Object.keys(S.heatmapData);const max=7;let h=`<div style="display:grid;grid-template-columns:36px repeat(${days.length},1fr);gap:3px;align-items:center">`;h+='<div></div>'+days.map(d=>`<div style="text-align:center;font-size:10px;color:var(--txt3);font-family:var(--mono)">${d}</div>`).join('');for(let hi=0;hi<6;hi++){h+=`<div style="font-size:10px;color:var(--txt3);font-family:var(--mono);text-align:right;padding-right:5px">${hours[hi]}</div>`;days.forEach(day=>{const v=(S.heatmapData[day]||[])[hi]||0;const a=v/max;h+=`<div class="hm-cell" data-tip="${day} ${hours[hi]}: ${v}h" style="height:22px;border-radius:3px;background:rgba(45,106,79,${a*0.7});border:1px solid rgba(45,106,79,${a*0.25+0.04})"></div>`;});}h+='</div><div style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:10px;color:var(--txt3);font-family:var(--mono)"><span>Less</span>${[0.08,0.22,0.38,0.55,0.72].map(a=>`<div style="width:13px;height:13px;border-radius:3px;background:rgba(45,106,79,${a})"></div>`).join('')}<span>More</span></div>';el.innerHTML=h;}
+function renderHeatmap(){
+  var el=document.getElementById('heatmap-wrap');if(!el)return;
+  var hours=['9am','11am','1pm','3pm','5pm','7pm'];
+  var days=Object.keys(S.heatmapData);
+  var max=7;
+  var h='<div style="display:grid;grid-template-columns:36px repeat('+days.length+',1fr);gap:3px;align-items:center">';
+  h+='<div></div>';
+  days.forEach(function(d){h+='<div style="text-align:center;font-size:10px;color:var(--txt3);font-family:var(--mono)">'+d+'</div>';});
+  for(var hi=0;hi<6;hi++){
+    h+='<div style="font-size:10px;color:var(--txt3);font-family:var(--mono);text-align:right;padding-right:5px">'+hours[hi]+'</div>';
+    days.forEach(function(day){
+      var v=(S.heatmapData[day]||[])[hi]||0;
+      var a=v/max;
+      h+='<div class="hm-cell" data-tip="'+day+' '+hours[hi]+': '+v+'h" style="height:22px;border-radius:3px;background:rgba(45,106,79,'+(a*0.7).toFixed(2)+');border:1px solid rgba(45,106,79,'+(a*0.25+0.04).toFixed(2)+')"></div>';
+    });
+  }
+  h+='</div>';
+  h+='<div style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:10px;color:var(--txt3);font-family:var(--mono)">';
+  h+='<span>Less</span>';
+  [0.08,0.22,0.38,0.55,0.72].forEach(function(a){h+='<div style="width:13px;height:13px;border-radius:3px;background:rgba(45,106,79,'+a+')"></div>';});
+  h+='<span>More</span></div>';
+  el.innerHTML=h;
+}
 
 // TASKS
 function renderTasks(){const fl=S.taskFilter,q=(document.getElementById('tsearch')||{}).value||'';let tasks=S.tasks;if(fl==='high')tasks=tasks.filter(t=>t.p==='high'&&!t.done);else if(fl==='medium')tasks=tasks.filter(t=>t.p==='medium'&&!t.done);else if(fl==='low')tasks=tasks.filter(t=>t.p==='low'&&!t.done);else if(fl==='done')tasks=tasks.filter(t=>t.done);else tasks=tasks.filter(t=>!t.done);if(q)tasks=tasks.filter(t=>t.text.toLowerCase().includes(q.toLowerCase()));const tl=document.getElementById('tasks-list');if(!tl)return;tl.innerHTML=tasks.length?tasks.map(t=>`<div class="ti${t.done?' done':''}"><div class="tck${t.done?' on':''}" onclick="toggleTask(${t.id})"></div><div class="pr pr${t.p[0]}"></div><div style="flex:1"><div class="ttxt${t.done?' done':''}">${t.text}</div><div style="display:flex;gap:5px;margin-top:3px">${t.project?`<span class="tag tok" style="font-size:10px">${t.project}</span>`:''} ${t.tag?`<span class="tag tnn" style="font-size:10px">${t.tag}</span>`:''}</div></div><div class="tact"><button class="btn bxs bg" onclick="setFocus(${t.id})" style="font-size:11px">▶</button><button class="btn bxs bdg" onclick="delTask(${t.id})" style="padding:3px 6px;font-size:11px">✕</button></div></div>`).join(''):'<div style="text-align:center;padding:22px;color:var(--txt3);font-size:12px;font-family:var(--mono)">No tasks here</div>';const b=document.getElementById('task-badge');if(b)b.textContent=S.tasks.filter(t=>!t.done).length;}
 function filterT(f,btn){S.taskFilter=f;document.querySelectorAll('.ftabs .ftab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderTasks();}
-function toggleTask(id){const t=S.tasks.find(t=>t.id===id);if(t){t.done=!t.done;save();renderTasks();}}
+function toggleTask(id){const t=S.tasks.find(t=>t.id===id);if(t){t.done=!t.done;save();renderTasks();renderDash();}}
 function delTask(id){S.tasks=S.tasks.filter(t=>t.id!==id);save();renderTasks();}
 function setFocus(id){S.focusId=id;save();syncFocus();}
 
@@ -1029,7 +1086,21 @@ function delExp(id){S.expenses=S.expenses.filter(e=>e.id!==id);save();renderExpe
 
 // SUBSCRIPTIONS
 function renderSubs(){const active=S.subscriptions.filter(s=>s.active);const total=active.reduce((s,sub)=>s+sub.amount,0);const upcoming=active.filter(s=>daysUntil(s.nextCharge)<=7&&daysUntil(s.nextCharge)>=0).length;document.getElementById('sub-stats').innerHTML=`<div class="sc"><div class="sl">Monthly Cost</div><div class="sv" style="color:var(--er-txt)">$${total.toFixed(2)}</div><div class="ss">Active</div></div><div class="sc"><div class="sl">Annual</div><div class="sv">$${(total*12).toFixed(0)}</div><div class="ss">Projected</div></div><div class="sc"><div class="sl">Due This Month</div><div class="sv wn">${upcoming}</div><div class="ss wn">Charging soon</div></div><div class="sc"><div class="sl">Services</div><div class="sv">${S.subscriptions.length}</div><div class="ss">Tracked</div></div>`;const sb=document.getElementById('sub-badge');if(sb){sb.textContent=upcoming>0?upcoming:'!';sb.style.display=upcoming>0?'inline':'none';}const sg=document.getElementById('subs-grid');if(!sg)return;sg.innerHTML=S.subscriptions.map(s=>`<div class="subcard"><div class="hs" style="margin-bottom:10px"><div style="width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);flex-shrink:0">${s.icon}</div><div style="flex:1"><div style="font-size:14px;font-weight:600">${s.name}</div><div style="font-size:11px;color:var(--txt3);font-family:var(--mono)">${s.cycle}</div></div><span class="tag ${s.active?'tok':'tnn'}">${s.active?'active':'paused'}</span></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--er-txt);opacity:.9">$${s.amount.toFixed(2)}</div><div style="font-size:11px;color:var(--txt3)">Next: <span style="color:var(--txt);font-weight:500">${fmtDate(s.nextCharge)}</span></div></div><div class="divl"></div><div style="display:flex;gap:5px"><button class="btn bg bxs" style="flex:1" onclick="markCharged(${s.id})">✓ Charged</button><button class="btn bxs" style="background:var(--wn-bg);color:var(--wn-txt);border:1px solid rgba(122,92,40,.2)" onclick="toggleSub(${s.id})">${s.active?'Pause':'Resume'}</button><button class="btn bxs bdg" onclick="delSub(${s.id})">✕</button></div></div>`).join('');}
-function markCharged(id){const s=S.subscriptions.find(s=>s.id===id);if(!s)return;S.expenses.push({id:S.nid++,name:s.name+' subscription',cat:'Software',icon:s.icon,date:TODAY,amount:-s.amount,type:'out'});const d=new Date(s.nextCharge);d.setMonth(d.getMonth()+1);s.nextCharge=d.toISOString().slice(0,10);save();renderSubs();showToast('✓','Subscription Logged','$'+s.amount.toFixed(2)+' for '+s.name,'');}
+function markCharged(id){
+  const s=S.subscriptions.find(function(sub){return sub.id===id;});
+  if(!s)return;
+  S.expenses.push({id:S.nid++,name:s.name+' subscription',cat:'Software',icon:s.icon,date:TODAY,amount:-s.amount,type:'out'});
+  if(s.accountId){
+    const acc=S.accounts.find(function(a){return a.id===s.accountId;});
+    if(acc){acc.balance-=s.amount;}
+  }
+  const d=new Date(s.nextCharge);
+  d.setMonth(d.getMonth()+1);
+  s.nextCharge=d.toISOString().slice(0,10);
+  save();renderSubs();renderDash();
+  const accName=s.accountId?(S.accounts.find(function(a){return a.id===s.accountId;})||{name:''}).name:'';
+  showToast('✓','Subscription Logged','$'+s.amount.toFixed(2)+' for '+s.name+(accName?' from '+accName:''),'');
+}
 function toggleSub(id){const s=S.subscriptions.find(s=>s.id===id);if(s){s.active=!s.active;save();renderSubs();}}
 function delSub(id){S.subscriptions=S.subscriptions.filter(s=>s.id!==id);save();renderSubs();}
 
@@ -1066,16 +1137,41 @@ function renderSocials(){const sg=document.getElementById('socials-grid');if(!sg
 
 // MODALS
 function openModal(type){const mr=document.getElementById('modal-root');if(type==='close'){mr.innerHTML='';return}const M=(title,body)=>`<div class="mov" onclick="if(event.target===this)closeModal()"><div class="modal fi"><div class="mh"><div class="mt">${title}</div><button class="mx" onclick="closeModal()">✕</button></div>${body}</div></div>`;if(type.startsWith('dep-')||type.startsWith('wit-')){const isDep=type.startsWith('dep-');const id=parseInt(type.split('-')[1]);const acc=S.accounts.find(a=>a.id===id);if(!acc)return;mr.innerHTML=M((isDep?'Deposit to ':'Withdraw from ')+acc.name,`<div class="fg"><label class="fl">Amount ($)</label><input type="number" id="txn-amt" placeholder="0.00"></div><div class="fg"><label class="fl">Note</label><input type="text" id="txn-note" placeholder="Description…"></div><div style="display:flex;gap:8px;margin-top:7px"><button class="btn bp" style="flex:1" onclick="doTxn(${id},${isDep?1:-1})">${isDep?'Deposit':'Withdraw'}</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`);return;}
-const bodies={quick:`<div style="display:flex;flex-direction:column;gap:5px"><button class="btn bg" style="text-align:left" onclick="closeModal();openModal('add-task')">✓  New Task</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('clients');openModal('add-client')">◈  New Client</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('projects');openModal('add-project')">◑  New Project</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('calendar');openModal('add-event')">◷  New Event</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('subscriptions');openModal('add-sub')">♻  New Subscription</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('expenses');openModal('add-expense')">$  Add Expense / Income</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('accounts');openModal('add-account')">🏦  New Account</button><button class="btn bg" style="text-align:left" onclick="closeModal();toggleWidget()">⊡  Toggle Focus Widget</button></div>`,'add-task':`<div class="fg"><label class="fl">Task</label><input type="text" id="t-tx" placeholder="What needs to be done?"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Priority</label><select id="t-p"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></div><div class="fg" style="margin:0"><label class="fl">Project</label><input type="text" id="t-pr" placeholder="Optional…"></div></div><div class="fg"><label class="fl">Tag</label><input type="text" id="t-tg" placeholder="UI Design, Admin…"></div><div style="display:flex;gap:8px;margin-top:5px"><button class="btn bp" style="flex:1" onclick="submitTask()">Add Task</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-client':`<div class="fg"><label class="fl">Studio / Company</label><input type="text" id="cl-n" placeholder="Studio name…"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Contact</label><input type="text" id="cl-c" placeholder="Name…"></div><div class="fg" style="margin:0"><label class="fl">Email</label><input type="text" id="cl-e" placeholder="email@studio.com"></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Commission Type</label><select id="cl-ct"><option value="UI">UI</option><option value="Icons">Icons</option><option value="Both">Both</option></select></div><div class="fg" style="margin:0"><label class="fl">Payment Method</label><select id="cl-pm"><option>Bank Transfer</option><option>PayPal</option><option>Wire</option><option>Cash</option></select></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Deadline</label><input type="date" id="cl-dl"></div><div class="fg" style="margin:0"><label class="fl">Tags</label><input type="text" id="cl-tg" placeholder="AAA, RPG…"></div></div><div style="display:flex;gap:8px"><button class="btn bp" style="flex:1" onclick="submitClient()">Add Client</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-project':`<div class="fg"><label class="fl">Project Name</label><input type="text" id="pj-n" placeholder="Project name…"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Client</label><input type="text" id="pj-c" placeholder="Client…"></div><div class="fg" style="margin:0"><label class="fl">Budget ($)</label><input type="number" id="pj-b" placeholder="0"></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Deadline</label><input type="date" id="pj-dl"></div><div class="fg" style="margin:0"><label class="fl">Status</label><select id="pj-st"><option value="new">New</option><option value="active">Active</option></select></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Commission Type</label><select id="pj-ct"><option value="UI">UI</option><option value="Icons">Icons</option><option value="Both">Both</option></select></div><div class="fg" style="margin:0"><label class="fl">Payment Method</label><select id="pj-pm"><option>Bank Transfer</option><option>PayPal</option><option>Wire</option><option>Cash</option></select></div></div><div class="fg"><label class="fl">Description</label><textarea id="pj-d" style="min-height:55px" placeholder="Brief description…"></textarea></div><div style="display:flex;gap:8px"><button class="btn bp" style="flex:1" onclick="submitProject()">Create</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-event':`<div class="fg"><label class="fl">Title</label><input type="text" id="ev-t" placeholder="Event title…"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Date</label><input type="date" id="ev-d" value="${S.selDate||TODAY}"></div><div class="fg" style="margin:0"><label class="fl">Time</label><input type="text" id="ev-tm" placeholder="14:00"></div></div><div class="fg"><label class="fl">Notify me</label><select id="ev-notify"><option value="15">15 min before</option><option value="30">30 min before</option><option value="60">1 hour before</option><option value="120" selected>2 hours before</option><option value="1440">1 day before</option></select></div><div style="display:flex;gap:8px;margin-top:5px"><button class="btn bp" style="flex:1" onclick="submitEvent()">Add Event</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-note':`<div class="fg"><label class="fl">Title</label><input type="text" id="nn-t" placeholder="Note title…"></div><div class="fg"><label class="fl">Content</label><textarea id="nn-c" placeholder="Start writing…"></textarea></div><div style="display:flex;gap:8px"><button class="btn bp" style="flex:1" onclick="submitNote()">Create</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-expense':`<div class="fg"><label class="fl">Description</label><input type="text" id="ex-n" placeholder="Description…"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Amount</label><input type="number" id="ex-a" placeholder="0.00"></div><div class="fg" style="margin:0"><label class="fl">Type</label><select id="ex-t"><option value="out">Expense</option><option value="in">Income</option></select></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Category</label><input type="text" id="ex-c" placeholder="Software, Equipment…"></div><div class="fg" style="margin:0"><label class="fl">Date</label><input type="date" id="ex-d" value="${TODAY}"></div></div><div style="display:flex;gap:8px;margin-top:5px"><button class="btn bp" style="flex:1" onclick="submitExpense()">Add</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-sub':`<div class="fg"><label class="fl">Service Name</label><input type="text" id="sb-n" placeholder="e.g. Adobe CC…"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Amount ($)</label><input type="number" id="sb-a" placeholder="0.00"></div><div class="fg" style="margin:0"><label class="fl">Cycle</label><select id="sb-cy"><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></div></div><div class="fg"><label class="fl">Next Charge Date</label><input type="date" id="sb-d" value="${TODAY}"></div><div style="display:flex;gap:8px;margin-top:5px"><button class="btn bp" style="flex:1" onclick="submitSub()">Add Subscription</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-account':`<div class="fg"><label class="fl">Account Name</label><input type="text" id="ac-n" placeholder="e.g. Main Bank Account"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Bank / Provider</label><input type="text" id="ac-b" placeholder="Bank name…"></div><div class="fg" style="margin:0"><label class="fl">Type</label><select id="ac-t"><option>Checking</option><option>Savings</option><option>Digital</option><option>Cash</option><option>Investment</option></select></div></div><div class="fg"><label class="fl">Balance ($)</label><input type="number" id="ac-bal" placeholder="0.00"></div><div style="display:flex;gap:8px"><button class="btn bp" style="flex:1" onclick="submitAccount()">Add Account</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`};const titles={quick:'Quick Add','add-task':'New Task','add-client':'New Client','add-project':'New Project','add-event':'New Event','add-note':'New Note','add-expense':'Add Transaction','add-sub':'New Subscription','add-account':'New Account'};mr.innerHTML=M(titles[type]||'New',bodies[type]||'');}
+const bodies={quick:`<div style="display:flex;flex-direction:column;gap:5px"><button class="btn bg" style="text-align:left" onclick="closeModal();openModal('add-task')">✓  New Task</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('clients');openModal('add-client')">◈  New Client</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('projects');openModal('add-project')">◑  New Project</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('calendar');openModal('add-event')">◷  New Event</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('subscriptions');openModal('add-sub')">♻  New Subscription</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('expenses');openModal('add-expense')">$  Add Expense / Income</button><button class="btn bg" style="text-align:left" onclick="closeModal();nav('accounts');openModal('add-account')">🏦  New Account</button><button class="btn bg" style="text-align:left" onclick="closeModal();toggleWidget()">⊡  Toggle Focus Widget</button></div>`,'add-task':`<div class="fg"><label class="fl">Task</label><input type="text" id="t-tx" placeholder="What needs to be done?"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Priority</label><select id="t-p"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></div><div class="fg" style="margin:0"><label class="fl">Project</label><input type="text" id="t-pr" placeholder="Optional…"></div></div><div class="fg"><label class="fl">Tag</label><input type="text" id="t-tg" placeholder="UI Design, Admin…"></div><div style="display:flex;gap:8px;margin-top:5px"><button class="btn bp" style="flex:1" onclick="submitTask()">Add Task</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-client':`<div class="fg"><label class="fl">Studio / Company</label><input type="text" id="cl-n" placeholder="Studio name…"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Contact</label><input type="text" id="cl-c" placeholder="Name…"></div><div class="fg" style="margin:0"><label class="fl">Email</label><input type="text" id="cl-e" placeholder="email@studio.com"></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Commission Type</label><select id="cl-ct"><option value="UI">UI</option><option value="Icons">Icons</option><option value="Both">Both</option></select></div><div class="fg" style="margin:0"><label class="fl">Payment Method</label><select id="cl-pm"><option>Bank Transfer</option><option>PayPal</option><option>Wire</option><option>Cash</option></select></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Deadline</label><input type="date" id="cl-dl"></div><div class="fg" style="margin:0"><label class="fl">Tags</label><input type="text" id="cl-tg" placeholder="AAA, RPG…"></div></div><div style="display:flex;gap:8px"><button class="btn bp" style="flex:1" onclick="submitClient()">Add Client</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-project':`<div class="fg"><label class="fl">Project Name</label><input type="text" id="pj-n" placeholder="Project name…"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Client</label><input type="text" id="pj-c" placeholder="Client…"></div><div class="fg" style="margin:0"><label class="fl">Budget ($)</label><input type="number" id="pj-b" placeholder="0"></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Deadline</label><input type="date" id="pj-dl"></div><div class="fg" style="margin:0"><label class="fl">Status</label><select id="pj-st"><option value="new">New</option><option value="active">Active</option></select></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Commission Type</label><select id="pj-ct"><option value="UI">UI</option><option value="Icons">Icons</option><option value="Both">Both</option></select></div><div class="fg" style="margin:0"><label class="fl">Payment Method</label><select id="pj-pm"><option>Bank Transfer</option><option>PayPal</option><option>Wire</option><option>Cash</option></select></div></div><div class="fg"><label class="fl">Description</label><textarea id="pj-d" style="min-height:55px" placeholder="Brief description…"></textarea></div><div style="display:flex;gap:8px"><button class="btn bp" style="flex:1" onclick="submitProject()">Create</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-event':`<div class="fg"><label class="fl">Title</label><input type="text" id="ev-t" placeholder="Event title…"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Date</label><input type="date" id="ev-d" value="${S.selDate||TODAY}"></div><div class="fg" style="margin:0"><label class="fl">Time</label><input type="text" id="ev-tm" placeholder="14:00"></div></div><div class="fg"><label class="fl">Notify me</label><select id="ev-notify"><option value="15">15 min before</option><option value="30">30 min before</option><option value="60">1 hour before</option><option value="120" selected>2 hours before</option><option value="1440">1 day before</option></select></div><div style="display:flex;gap:8px;margin-top:5px"><button class="btn bp" style="flex:1" onclick="submitEvent()">Add Event</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-note':`<div class="fg"><label class="fl">Title</label><input type="text" id="nn-t" placeholder="Note title…"></div><div class="fg"><label class="fl">Content</label><textarea id="nn-c" placeholder="Start writing…"></textarea></div><div style="display:flex;gap:8px"><button class="btn bp" style="flex:1" onclick="submitNote()">Create</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-expense':`<div class="fg"><label class="fl">Description</label><input type="text" id="ex-n" placeholder="Description…"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Amount</label><input type="number" id="ex-a" placeholder="0.00"></div><div class="fg" style="margin:0"><label class="fl">Type</label><select id="ex-t"><option value="out">Expense</option><option value="in">Income</option></select></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Category</label><input type="text" id="ex-c" placeholder="Software, Equipment…"></div><div class="fg" style="margin:0"><label class="fl">Date</label><input type="date" id="ex-d" value="${TODAY}"></div></div><div class="fg"><label class="fl">Account (optional)</label><select id="ex-acc"><option value="">— No account —</option>${S.accounts.map(a=>'<option value="'+a.id+'">'+a.name+' ($'+a.balance.toLocaleString()+')</option>').join('')}</select></div><div style="display:flex;gap:8px;margin-top:5px"><button class="btn bp" style="flex:1" onclick="submitExpense()">Add</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-sub':`<div class="fg"><label class="fl">Service Name</label><input type="text" id="sb-n" placeholder="e.g. Adobe CC…"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Amount ($)</label><input type="number" id="sb-a" placeholder="0.00"></div><div class="fg" style="margin:0"><label class="fl">Cycle</label><select id="sb-cy"><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></div></div><div class="fg"><label class="fl">Next Charge Date</label><input type="date" id="sb-d" value="${TODAY}"></div><div class="fg"><label class="fl">Deduct from Account</label><select id="sb-acc"><option value="">— No account —</option>${S.accounts.map(a=>'<option value="'+a.id+'">'+a.name+' ($'+a.balance.toLocaleString()+')</option>').join('')}</select></div><div style="display:flex;gap:8px;margin-top:5px"><button class="btn bp" style="flex:1" onclick="submitSub()">Add Subscription</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'add-account':`<div class="fg"><label class="fl">Account Name</label><input type="text" id="ac-n" placeholder="e.g. Main Bank Account"></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Bank / Provider</label><input type="text" id="ac-b" placeholder="Bank name…"></div><div class="fg" style="margin:0"><label class="fl">Type</label><select id="ac-t"><option>Checking</option><option>Savings</option><option>Digital</option><option>Cash</option><option>Investment</option></select></div></div><div class="fg"><label class="fl">Balance ($)</label><input type="number" id="ac-bal" placeholder="0.00"></div><div style="display:flex;gap:8px"><button class="btn bp" style="flex:1" onclick="submitAccount()">Add Account</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,'addStock':`<div class="fg"><label class="fl">Search Stock</label><input type="text" id="m-search" placeholder="AAPL, NVDA, TSLA..." oninput="filterAssets(this.value,&apos;stock&apos;)" autocomplete="off"></div><div id="m-asset-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;max-height:140px;overflow-y:auto;margin-bottom:10px"><div class="asset-pick" onclick="pickStock('AAPL')" data-s="AAPL" title="Apple">AAPL</div><div class="asset-pick" onclick="pickStock('MSFT')" data-s="MSFT" title="Microsoft">MSFT</div><div class="asset-pick" onclick="pickStock('GOOGL')" data-s="GOOGL" title="Google">GOOGL</div><div class="asset-pick" onclick="pickStock('AMZN')" data-s="AMZN" title="Amazon">AMZN</div><div class="asset-pick" onclick="pickStock('META')" data-s="META" title="Meta">META</div><div class="asset-pick" onclick="pickStock('NVDA')" data-s="NVDA" title="Nvidia">NVDA</div><div class="asset-pick" onclick="pickStock('TSLA')" data-s="TSLA" title="Tesla">TSLA</div><div class="asset-pick" onclick="pickStock('NFLX')" data-s="NFLX" title="Netflix">NFLX</div><div class="asset-pick" onclick="pickStock('AMD')" data-s="AMD" title="AMD">AMD</div><div class="asset-pick" onclick="pickStock('INTC')" data-s="INTC" title="Intel">INTC</div><div class="asset-pick" onclick="pickStock('QCOM')" data-s="QCOM" title="Qualcomm">QCOM</div><div class="asset-pick" onclick="pickStock('AVGO')" data-s="AVGO" title="Broadcom">AVGO</div><div class="asset-pick" onclick="pickStock('MU')" data-s="MU" title="Micron">MU</div><div class="asset-pick" onclick="pickStock('AMAT')" data-s="AMAT" title="Applied Mtrl">AMAT</div><div class="asset-pick" onclick="pickStock('ASML')" data-s="ASML" title="ASML">ASML</div><div class="asset-pick" onclick="pickStock('CRM')" data-s="CRM" title="Salesforce">CRM</div><div class="asset-pick" onclick="pickStock('ORCL')" data-s="ORCL" title="Oracle">ORCL</div><div class="asset-pick" onclick="pickStock('ADBE')" data-s="ADBE" title="Adobe">ADBE</div><div class="asset-pick" onclick="pickStock('NOW')" data-s="NOW" title="ServiceNow">NOW</div><div class="asset-pick" onclick="pickStock('SHOP')" data-s="SHOP" title="Shopify">SHOP</div><div class="asset-pick" onclick="pickStock('SQ')" data-s="SQ" title="Block">SQ</div><div class="asset-pick" onclick="pickStock('PYPL')" data-s="PYPL" title="PayPal">PYPL</div><div class="asset-pick" onclick="pickStock('UBER')" data-s="UBER" title="Uber">UBER</div><div class="asset-pick" onclick="pickStock('JPM')" data-s="JPM" title="JP Morgan">JPM</div><div class="asset-pick" onclick="pickStock('GS')" data-s="GS" title="Goldman">GS</div><div class="asset-pick" onclick="pickStock('V')" data-s="V" title="Visa">V</div><div class="asset-pick" onclick="pickStock('MA')" data-s="MA" title="Mastercard">MA</div><div class="asset-pick" onclick="pickStock('COIN')" data-s="COIN" title="Coinbase">COIN</div><div class="asset-pick" onclick="pickStock('PLTR')" data-s="PLTR" title="Palantir">PLTR</div><div class="asset-pick" onclick="pickStock('NET')" data-s="NET" title="Cloudflare">NET</div><div class="asset-pick" onclick="pickStock('CRWD')" data-s="CRWD" title="Crowdstrike">CRWD</div><div class="asset-pick" onclick="pickStock('DDOG')" data-s="DDOG" title="Datadog">DDOG</div><div class="asset-pick" onclick="pickStock('ZM')" data-s="ZM" title="Zoom">ZM</div><div class="asset-pick" onclick="pickStock('SNOW')" data-s="SNOW" title="Snowflake">SNOW</div><div class="asset-pick" onclick="pickStock('ABNB')" data-s="ABNB" title="Airbnb">ABNB</div><div class="asset-pick" onclick="pickStock('RBLX')" data-s="RBLX" title="Roblox">RBLX</div><div class="asset-pick" onclick="pickStock('EA')" data-s="EA" title="EA Games">EA</div><div class="asset-pick" onclick="pickStock('TTWO')" data-s="TTWO" title="Take-Two">TTWO</div><div class="asset-pick" onclick="pickStock('U')" data-s="U" title="Unity">U</div><div class="asset-pick" onclick="pickStock('SPY')" data-s="SPY" title="S&P 500 ETF">SPY</div><div class="asset-pick" onclick="pickStock('QQQ')" data-s="QQQ" title="Nasdaq ETF">QQQ</div><div class="asset-pick" onclick="pickStock('DIS')" data-s="DIS" title="Disney">DIS</div><div class="asset-pick" onclick="pickStock('SPOT')" data-s="SPOT" title="Spotify">SPOT</div><div class="asset-pick" onclick="pickStock('HOOD')" data-s="HOOD" title="Robinhood">HOOD</div><div class="asset-pick" onclick="pickStock('SNAP')" data-s="SNAP" title="Snap">SNAP</div></div><div id="m-selected-asset" style="display:none;background:var(--sur2);border:1px solid var(--acc-brd);border-radius:var(--r);padding:10px;margin-bottom:10px"><div style="font-size:10px;color:var(--txt3);font-family:var(--mono);text-transform:uppercase;margin-bottom:4px">Selected</div><div id="m-sel-label" style="font-size:14px;font-weight:700"></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Shares</label><input type="number" id="m-qty" placeholder="10" step="0.001" min="0"></div><div class="fg" style="margin:0"><label class="fl">Current Price ($)</label><input type="number" id="m-price" placeholder="auto-fills..." step="0.01"></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Avg Cost ($)</label><input type="number" id="m-cost" placeholder="150.00" step="0.01"></div><div class="fg" style="margin:0"><label class="fl">Color</label><input id="m-scolor" type="color" value="#2d6a4f" style="height:38px;padding:2px"></div></div><input type="hidden" id="m-ticker"><input type="hidden" id="m-sname"><div style="display:flex;gap:8px;margin-top:6px"><button class="btn bp" style="flex:1" onclick="saveStock()">Add to Portfolio</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,
+'addCrypto':`<div class="fg"><label class="fl">Search Coin</label><input type="text" id="m-search" placeholder="BTC, ETH, SOL..." oninput="filterAssets(this.value,&apos;crypto&apos;)" autocomplete="off"></div><div id="m-asset-grid" style="display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto;margin-bottom:10px"><div class="asset-pick coin-pick" onclick="pickCoin('BTC','Bitcoin','#f7931a')" data-s="BTC"><span style="color:#f7931a;font-weight:700;font-size:11px;width:46px;display:inline-block">BTC</span><span style="font-size:11px;color:var(--txt2)">Bitcoin</span></div><div class="asset-pick coin-pick" onclick="pickCoin('ETH','Ethereum','#627eea')" data-s="ETH"><span style="color:#627eea;font-weight:700;font-size:11px;width:46px;display:inline-block">ETH</span><span style="font-size:11px;color:var(--txt2)">Ethereum</span></div><div class="asset-pick coin-pick" onclick="pickCoin('SOL','Solana','#9945ff')" data-s="SOL"><span style="color:#9945ff;font-weight:700;font-size:11px;width:46px;display:inline-block">SOL</span><span style="font-size:11px;color:var(--txt2)">Solana</span></div><div class="asset-pick coin-pick" onclick="pickCoin('BNB','BNB','#f3ba2f')" data-s="BNB"><span style="color:#f3ba2f;font-weight:700;font-size:11px;width:46px;display:inline-block">BNB</span><span style="font-size:11px;color:var(--txt2)">BNB</span></div><div class="asset-pick coin-pick" onclick="pickCoin('XRP','XRP','#346aa9')" data-s="XRP"><span style="color:#346aa9;font-weight:700;font-size:11px;width:46px;display:inline-block">XRP</span><span style="font-size:11px;color:var(--txt2)">XRP</span></div><div class="asset-pick coin-pick" onclick="pickCoin('ADA','Cardano','#4a9eff')" data-s="ADA"><span style="color:#4a9eff;font-weight:700;font-size:11px;width:46px;display:inline-block">ADA</span><span style="font-size:11px;color:var(--txt2)">Cardano</span></div><div class="asset-pick coin-pick" onclick="pickCoin('DOGE','Dogecoin','#c3a634')" data-s="DOGE"><span style="color:#c3a634;font-weight:700;font-size:11px;width:46px;display:inline-block">DOGE</span><span style="font-size:11px;color:var(--txt2)">Dogecoin</span></div><div class="asset-pick coin-pick" onclick="pickCoin('AVAX','Avalanche','#e84142')" data-s="AVAX"><span style="color:#e84142;font-weight:700;font-size:11px;width:46px;display:inline-block">AVAX</span><span style="font-size:11px;color:var(--txt2)">Avalanche</span></div><div class="asset-pick coin-pick" onclick="pickCoin('LINK','Chainlink','#2a5ada')" data-s="LINK"><span style="color:#2a5ada;font-weight:700;font-size:11px;width:46px;display:inline-block">LINK</span><span style="font-size:11px;color:var(--txt2)">Chainlink</span></div><div class="asset-pick coin-pick" onclick="pickCoin('DOT','Polkadot','#e6007a')" data-s="DOT"><span style="color:#e6007a;font-weight:700;font-size:11px;width:46px;display:inline-block">DOT</span><span style="font-size:11px;color:var(--txt2)">Polkadot</span></div><div class="asset-pick coin-pick" onclick="pickCoin('MATIC','Polygon','#8247e5')" data-s="MATIC"><span style="color:#8247e5;font-weight:700;font-size:11px;width:46px;display:inline-block">MATIC</span><span style="font-size:11px;color:var(--txt2)">Polygon</span></div><div class="asset-pick coin-pick" onclick="pickCoin('UNI','Uniswap','#ff007a')" data-s="UNI"><span style="color:#ff007a;font-weight:700;font-size:11px;width:46px;display:inline-block">UNI</span><span style="font-size:11px;color:var(--txt2)">Uniswap</span></div><div class="asset-pick coin-pick" onclick="pickCoin('LTC','Litecoin','#bfbbbb')" data-s="LTC"><span style="color:#bfbbbb;font-weight:700;font-size:11px;width:46px;display:inline-block">LTC</span><span style="font-size:11px;color:var(--txt2)">Litecoin</span></div><div class="asset-pick coin-pick" onclick="pickCoin('ATOM','Cosmos','#6f7390')" data-s="ATOM"><span style="color:#6f7390;font-weight:700;font-size:11px;width:46px;display:inline-block">ATOM</span><span style="font-size:11px;color:var(--txt2)">Cosmos</span></div><div class="asset-pick coin-pick" onclick="pickCoin('FIL','Filecoin','#0090ff')" data-s="FIL"><span style="color:#0090ff;font-weight:700;font-size:11px;width:46px;display:inline-block">FIL</span><span style="font-size:11px;color:var(--txt2)">Filecoin</span></div><div class="asset-pick coin-pick" onclick="pickCoin('APT','Aptos','#2dd8a3')" data-s="APT"><span style="color:#2dd8a3;font-weight:700;font-size:11px;width:46px;display:inline-block">APT</span><span style="font-size:11px;color:var(--txt2)">Aptos</span></div><div class="asset-pick coin-pick" onclick="pickCoin('ARB','Arbitrum','#28a0f0')" data-s="ARB"><span style="color:#28a0f0;font-weight:700;font-size:11px;width:46px;display:inline-block">ARB</span><span style="font-size:11px;color:var(--txt2)">Arbitrum</span></div><div class="asset-pick coin-pick" onclick="pickCoin('OP','Optimism','#ff0420')" data-s="OP"><span style="color:#ff0420;font-weight:700;font-size:11px;width:46px;display:inline-block">OP</span><span style="font-size:11px;color:var(--txt2)">Optimism</span></div><div class="asset-pick coin-pick" onclick="pickCoin('SUI','Sui','#4da2ff')" data-s="SUI"><span style="color:#4da2ff;font-weight:700;font-size:11px;width:46px;display:inline-block">SUI</span><span style="font-size:11px;color:var(--txt2)">Sui</span></div><div class="asset-pick coin-pick" onclick="pickCoin('TON','Toncoin','#0098ea')" data-s="TON"><span style="color:#0098ea;font-weight:700;font-size:11px;width:46px;display:inline-block">TON</span><span style="font-size:11px;color:var(--txt2)">Toncoin</span></div><div class="asset-pick coin-pick" onclick="pickCoin('TRX','TRON','#ff0013')" data-s="TRX"><span style="color:#ff0013;font-weight:700;font-size:11px;width:46px;display:inline-block">TRX</span><span style="font-size:11px;color:var(--txt2)">TRON</span></div><div class="asset-pick coin-pick" onclick="pickCoin('NEAR','NEAR','#00ec97')" data-s="NEAR"><span style="color:#00ec97;font-weight:700;font-size:11px;width:46px;display:inline-block">NEAR</span><span style="font-size:11px;color:var(--txt2)">NEAR</span></div><div class="asset-pick coin-pick" onclick="pickCoin('ICP','Internet Comp','#29abe2')" data-s="ICP"><span style="color:#29abe2;font-weight:700;font-size:11px;width:46px;display:inline-block">ICP</span><span style="font-size:11px;color:var(--txt2)">Internet Comp</span></div><div class="asset-pick coin-pick" onclick="pickCoin('INJ','Injective','#00b4d8')" data-s="INJ"><span style="color:#00b4d8;font-weight:700;font-size:11px;width:46px;display:inline-block">INJ</span><span style="font-size:11px;color:var(--txt2)">Injective</span></div><div class="asset-pick coin-pick" onclick="pickCoin('FTM','Fantom','#13b5ec')" data-s="FTM"><span style="color:#13b5ec;font-weight:700;font-size:11px;width:46px;display:inline-block">FTM</span><span style="font-size:11px;color:var(--txt2)">Fantom</span></div><div class="asset-pick coin-pick" onclick="pickCoin('SAND','The Sandbox','#04adef')" data-s="SAND"><span style="color:#04adef;font-weight:700;font-size:11px;width:46px;display:inline-block">SAND</span><span style="font-size:11px;color:var(--txt2)">The Sandbox</span></div><div class="asset-pick coin-pick" onclick="pickCoin('MANA','Decentraland','#ff2d55')" data-s="MANA"><span style="color:#ff2d55;font-weight:700;font-size:11px;width:46px;display:inline-block">MANA</span><span style="font-size:11px;color:var(--txt2)">Decentraland</span></div><div class="asset-pick coin-pick" onclick="pickCoin('PEPE','Pepe','#479f53')" data-s="PEPE"><span style="color:#479f53;font-weight:700;font-size:11px;width:46px;display:inline-block">PEPE</span><span style="font-size:11px;color:var(--txt2)">Pepe</span></div><div class="asset-pick coin-pick" onclick="pickCoin('WIF','dogwifhat','#a855f7')" data-s="WIF"><span style="color:#a855f7;font-weight:700;font-size:11px;width:46px;display:inline-block">WIF</span><span style="font-size:11px;color:var(--txt2)">dogwifhat</span></div><div class="asset-pick coin-pick" onclick="pickCoin('BONK','Bonk','#f97316')" data-s="BONK"><span style="color:#f97316;font-weight:700;font-size:11px;width:46px;display:inline-block">BONK</span><span style="font-size:11px;color:var(--txt2)">Bonk</span></div></div><div id="m-selected-asset" style="display:none;background:var(--sur2);border:1px solid var(--acc-brd);border-radius:var(--r);padding:10px;margin-bottom:10px"><div style="font-size:10px;color:var(--txt3);font-family:var(--mono);text-transform:uppercase;margin-bottom:4px">Selected</div><div id="m-sel-label" style="font-size:14px;font-weight:700"></div></div><div class="fr"><div class="fg" style="margin:0"><label class="fl">Amount (coins)</label><input type="number" id="m-cqty" placeholder="0.5" step="0.000001" min="0"></div><div class="fg" style="margin:0"><label class="fl">Avg Buy Price ($)</label><input type="number" id="m-ccost" placeholder="auto-fills..." step="0.01"></div></div><input type="hidden" id="m-coin"><input type="hidden" id="m-coin-name"><input type="hidden" id="m-coin-color"><div style="display:flex;gap:8px;margin-top:6px"><button class="btn bp" style="flex:1" onclick="saveCrypto()">Add to Portfolio</button><button class="btn bg" onclick="closeModal()">Cancel</button></div>`,
+};const titles={quick:'Quick Add','add-task':'New Task','add-client':'New Client','add-project':'New Project','add-event':'New Event','add-note':'New Note','add-expense':'Add Transaction','add-sub':'New Subscription','add-account':'New Account',addStock:'Add Stock',addCrypto:'Add Coin'};mr.innerHTML=M(titles[type]||'New',bodies[type]||'');}
 function closeModal(){document.getElementById('modal-root').innerHTML=''}
 const gv=id=>(document.getElementById(id)||{}).value||'';
 function submitTask(){const t=gv('t-tx');if(!t.trim())return;S.tasks.unshift({id:S.nid++,text:t.trim(),p:gv('t-p')||'medium',done:false,project:gv('t-pr'),tag:gv('t-tg')});save();closeModal();renderTasks();}
 function submitClient(){const n=gv('cl-n');if(!n.trim())return;const ini=n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);const i=S.clients.length%ACCS.length;S.clients.push({id:S.nid++,name:n.trim(),contact:gv('cl-c'),email:gv('cl-e'),status:'new',projects:0,revenue:0,color:ACCS[i],txt:ACCTXT[i],ini,tags:gv('cl-tg').split(',').map(t=>t.trim()).filter(Boolean),deadline:gv('cl-dl'),payMethod:gv('cl-pm')||'Bank Transfer',payStatus:'unpaid',designs:0,commType:gv('cl-ct')||'UI'});save();closeModal();renderClients();}
 function submitProject(){const n=gv('pj-n');if(!n.trim())return;const i=S.projects.length%ACCS.length;S.projects.unshift({id:S.nid++,name:n.trim(),client:gv('pj-c'),status:gv('pj-st')||'new',progress:0,deadline:gv('pj-dl'),budget:parseFloat(gv('pj-b'))||0,color:ACCS[i],ctxt:ACCTXT[i],desc:gv('pj-d'),payStatus:'unpaid',payMethod:gv('pj-pm')||'Bank Transfer',designs:0,commType:gv('pj-ct')||'UI',tasks:[]});save();closeModal();renderProjects();}
-function submitEvent(){const t=gv('ev-t');if(!t.trim())return;S.events.push({id:S.nid++,title:t.trim(),date:gv('ev-d')||TODAY,time:gv('ev-tm'),color:'rgba(45,106,79,0.6)',notifyMins:parseInt(gv('ev-notify'))||120});save();closeModal();renderCalendar();}
+function submitEvent(){const t=gv('ev-t');if(!t.trim())return;const ev={id:S.nid++,title:t.trim(),date:gv('ev-d')||TODAY,time:gv('ev-tm')||'',color:'rgba(45,106,79,0.6)',notifyMins:parseInt(gv('ev-notify'))||120};S.events.push(ev);save();closeModal();renderCalendar();if(gcalIsConnected())gcalPushEvent(ev);}
 function submitNote(){const t=gv('nn-t');if(!t.trim())return;const n={id:S.nid++,title:t.trim(),content:gv('nn-c'),created:TODAY};S.notes.unshift(n);save();closeModal();renderNotes();openNote(n.id);}
-function submitExpense(){const n=gv('ex-n'),a=gv('ex-a');if(!n||!a)return;const type=gv('ex-t')||'out';const cat=gv('ex-c')||'Other';const icons={Software:'🔧',Income:'💰',Equipment:'🖊',Assets:'📦',Other:'💼'};S.expenses.push({id:S.nid++,name:n.trim(),cat,icon:icons[cat]||'💼',date:gv('ex-d')||TODAY,amount:type==='out'?-parseFloat(a):parseFloat(a),type});save();closeModal();renderExpenses();}
-function submitSub(){const n=gv('sb-n');if(!n.trim())return;S.subscriptions.push({id:S.nid++,name:n.trim(),icon:'🔄',amount:parseFloat(gv('sb-a'))||0,cycle:gv('sb-cy')||'monthly',nextCharge:gv('sb-d')||TODAY,active:true});save();closeModal();renderSubs();}
+function submitExpense(){
+  const n=gv('ex-n'),a=gv('ex-a');
+  if(!n||!a)return;
+  const type=gv('ex-t')||'out';
+  const cat=gv('ex-c')||'Other';
+  const amt=parseFloat(a)||0;
+  const icons={Software:'🔧',Income:'💰',Equipment:'🖊',Assets:'📦',Other:'💼'};
+  S.expenses.push({id:S.nid++,name:n.trim(),cat,icon:icons[cat]||'💼',date:gv('ex-d')||TODAY,amount:type==='out'?-amt:amt,type});
+  const accId=parseInt(gv('ex-acc'));
+  if(accId){
+    const acc=S.accounts.find(function(a){return a.id===accId;});
+    if(acc){
+      acc.balance+=(type==='out'?-amt:amt);
+      showToast(type==='out'?'💸':'💰',type==='out'?'Expense Logged':'Income Added','$'+amt.toFixed(2)+' '+(type==='out'?'deducted from':'added to')+' '+acc.name,'');
+    }
+  }
+  save();closeModal();renderExpenses();renderDash();
+}
+function submitSub(){
+  const n=gv('sb-n');
+  if(!n.trim())return;
+  const accId=parseInt(gv('sb-acc'))||null;
+  S.subscriptions.push({id:S.nid++,name:n.trim(),icon:'🔄',amount:parseFloat(gv('sb-a'))||0,cycle:gv('sb-cy')||'monthly',nextCharge:gv('sb-d')||TODAY,active:true,accountId:accId});
+  save();closeModal();renderSubs();
+}
 function submitAccount(){const n=gv('ac-n');if(!n.trim())return;const i=S.accounts.length%ACCS.length;const icons=['🏦','🏛','💳','💵','📈'];S.accounts.push({id:S.nid++,name:n.trim(),type:gv('ac-t')||'Checking',bank:gv('ac-b'),balance:parseFloat(gv('ac-bal'))||0,color:ACCS[i],icon:icons[i]});save();closeModal();renderAccounts();}
 function doTxn(id,dir){const amt=parseFloat(gv('txn-amt'));const note=gv('txn-note');if(!amt)return;const acc=S.accounts.find(a=>a.id===id);if(!acc)return;acc.balance+=dir*amt;S.expenses.push({id:S.nid++,name:note||(dir>0?'Deposit':'Withdrawal')+' — '+acc.name,cat:'Transfer',icon:dir>0?'⬆':'⬇',date:TODAY,amount:dir*amt,type:dir>0?'in':'out'});save();closeModal();renderAccounts();showToast(dir>0?'✓':'−',(dir>0?'Deposited':'Withdrawn'),'$'+amt.toFixed(2)+' '+(dir>0?'added to':'from')+' '+acc.name,'');}
 
@@ -1230,6 +1326,48 @@ function handleChat(msg){
   document.getElementById('chat-suggestions').innerHTML='';
   const m=msg.toLowerCase();
   setTimeout(()=>{
+    // ── BOT STATE MACHINE ──
+    if(window._botMode){
+      const mode=window._botMode;
+      window._botMode=null;
+
+      if(mode==='expense_account'||mode==='income_account'){
+        const isIncome=(mode==='income_account');
+        // Find which account they picked
+        const acc=S.accounts.find(function(a){return m.includes(a.name.toLowerCase());}) || S.accounts[parseInt(msg)-1];
+        if(!acc){addBotMsg('Account not found. Try again.');window._botMode=mode;return;}
+        window._botPendingAccount=acc.id;
+        window._botMode=isIncome?'income_amount':'expense_amount';
+        addBotMsg((isIncome?'💰 How much income to add to <b>':'💸 How much to deduct from <b>')+acc.name+'</b>? (enter amount)');
+        return;
+      }
+
+      if(mode==='expense_amount'||mode==='income_amount'){
+        const isIncome=(mode==='income_amount');
+        const amt=parseFloat(msg.replace(/[^0-9.]/g,''));
+        if(!amt||isNaN(amt)){addBotMsg('Enter a valid number.');window._botMode=mode;return;}
+        window._botPendingAmount=amt;
+        window._botMode=isIncome?'income_desc':'expense_desc';
+        addBotMsg('What is this '+(isIncome?'income':'expense')+' for? (e.g. Client payment, Figma subscription)');
+        return;
+      }
+
+      if(mode==='expense_desc'||mode==='income_desc'){
+        const isIncome=(mode==='income_desc');
+        const desc=msg.trim()||( isIncome?'Income':'Expense');
+        const amt=window._botPendingAmount||0;
+        const accId=window._botPendingAccount;
+        const acc=S.accounts.find(function(a){return a.id===accId;});
+        if(acc){acc.balance+=(isIncome?amt:-amt);}
+        S.expenses.push({id:S.nid++,name:desc,cat:isIncome?'Income':'Other',icon:isIncome?'💰':'💸',date:TODAY,amount:isIncome?amt:-amt,type:isIncome?'in':'out'});
+        save();
+        window._botPendingAccount=null;window._botPendingAmount=null;
+        addBotMsg((isIncome?'✅ Income recorded: <b>+$':'✅ Expense logged: <b>-$')+amt.toFixed(2)+'</b> — '+desc+(acc?' ('+acc.name+')':''));
+        showSuggestions(['My balance','Add another','View accounts']);
+        return;
+      }
+    }
+
     // Tasks
     if(m.includes('task')||m.includes('todo')){
       if(m.includes('add')||m.includes('create')||m.includes('new')){
@@ -1280,13 +1418,29 @@ function handleChat(msg){
       addBotMsg(`📅 <b>Upcoming events:</b><br>`+upcoming.map(e=>`📌 <b>${e.title}</b> — ${fmtDate(e.date)}${e.time?' at '+e.time:''}`).join('<br>'));
       showSuggestions(['Add event','View calendar','Today only']);
     }
+    // Add expense via bot
+    else if((m.includes('add')&&m.includes('expense'))||(m.includes('log')&&m.includes('expense'))){
+      if(S.accounts.length===0){addBotMsg('No accounts found. Add an account first in the Accounts page.');return;}
+      const accList=S.accounts.map((a,i)=>'<b>'+(i+1)+'.</b> '+a.name+' ($'+a.balance.toLocaleString()+')').join('<br>');
+      addBotMsg('💸 What account to deduct from?<br>'+accList);
+      window._botMode='expense_account';
+      showSuggestions(S.accounts.map(function(a){return a.name;}));
+    }
+    // Add income via bot
+    else if((m.includes('add')&&m.includes('income'))||(m.includes('got paid'))||(m.includes('received')&&m.includes('payment'))){
+      if(S.accounts.length===0){addBotMsg('No accounts found. Add an account first.');return;}
+      const accList=S.accounts.map((a,i)=>'<b>'+(i+1)+'.</b> '+a.name).join('<br>');
+      addBotMsg('💰 Which account to add income to?<br>'+accList);
+      window._botMode='income_account';
+      showSuggestions(S.accounts.map(function(a){return a.name;}));
+    }
     // Balance / money
     else if(m.includes('balance')||m.includes('money')||m.includes('account')||m.includes('finance')){
       const total=S.accounts.reduce((s,a)=>s+a.balance,0);
       const income=S.expenses.filter(e=>e.type==='in').reduce((s,e)=>s+e.amount,0);
       const expenses=Math.abs(S.expenses.filter(e=>e.type==='out').reduce((s,e)=>s+e.amount,0));
       addBotMsg(`💰 <b>Financial summary:</b><br>Total balance: <b>$${total.toLocaleString()}</b><br>Income this month: <b style="color:var(--ok-txt)">+$${income.toFixed(0)}</b><br>Expenses: <b style="color:var(--er-txt)">-$${expenses.toFixed(0)}</b><br>Net: <b>$${(income-expenses).toFixed(0)}</b>`);
-      showSuggestions(['View accounts','Add expense','Subscriptions']);
+      showSuggestions(['View accounts','Add expense','Add income','Subscriptions']);
     }
     // Goals
     else if(m.includes('goal')||m.includes('priority')||m.includes('today')){
@@ -1315,23 +1469,278 @@ function handleChat(msg){
   }, 300);
 }
 
+
+// ════════════════════════════════════════════════════════════════
+// GOOGLE CALENDAR INTEGRATION
+// ════════════════════════════════════════════════════════════════
+let gcalTokens = null;
+
+function gcalLoad() {
+  try {
+    const stored = localStorage.getItem('kopit_gcal_tokens');
+    if (stored) gcalTokens = JSON.parse(stored);
+  } catch(e) {}
+}
+
+function gcalSave() {
+  if (gcalTokens) localStorage.setItem('kopit_gcal_tokens', JSON.stringify(gcalTokens));
+  else localStorage.removeItem('kopit_gcal_tokens');
+}
+
+function gcalIsConnected() {
+  return gcalTokens && gcalTokens.refresh_token;
+}
+
+function gcalUpdateUI() {
+  const btn     = document.getElementById('gcal-btn');
+  const btnTxt  = document.getElementById('gcal-btn-txt');
+  const syncBtn = document.getElementById('gcal-sync-btn');
+  if (!btn) return;
+  if (gcalIsConnected()) {
+    btn.style.background    = 'rgba(45,106,79,0.2)';
+    btn.style.borderColor   = 'rgba(45,106,79,0.4)';
+    btn.style.color         = 'var(--ok-txt)';
+    btn.setAttribute('onclick', 'gcalDisconnect()');
+    if (btnTxt) btnTxt.textContent = '✓ Google Connected';
+    if (syncBtn) syncBtn.style.display = 'flex';
+  } else {
+    btn.style.background  = '';
+    btn.style.borderColor = '';
+    btn.style.color       = '';
+    btn.setAttribute('onclick', 'gcalConnect()');
+    if (btnTxt) btnTxt.textContent = 'Connect Google';
+    if (syncBtn) syncBtn.style.display = 'none';
+  }
+}
+
+async function gcalConnect() {
+  const btnTxt = document.getElementById('gcal-btn-txt');
+  if (btnTxt) btnTxt.textContent = 'Connecting...';
+  try {
+    const result = await ipcRenderer.invoke('gcal-connect');
+    if (result.success) {
+      gcalTokens = result.tokens;
+      gcalTokens.expires_at = Date.now() + (gcalTokens.expires_in * 1000);
+      gcalSave();
+      gcalUpdateUI();
+      showToast('📅', 'Google Calendar Connected', 'Your events will sync automatically.', '');
+      gcalSync();
+    } else {
+      if (btnTxt) btnTxt.textContent = 'Connect Google';
+      showToast('⚠', 'Connection Failed', result.error || 'Try again.', 'warn');
+    }
+  } catch(e) {
+    if (btnTxt) btnTxt.textContent = 'Connect Google';
+    showToast('⚠', 'Error', e.message, 'warn');
+  }
+}
+
+function gcalDisconnect() {
+  gcalTokens = null;
+  gcalSave();
+  gcalUpdateUI();
+  showToast('', 'Google Calendar Disconnected', 'Your local events are still saved.', '');
+}
+
+async function gcalGetValidToken() {
+  if (!gcalTokens) return null;
+  // Refresh if expired or expiring in 2 minutes
+  if (!gcalTokens.expires_at || Date.now() > gcalTokens.expires_at - 120000) {
+    const result = await ipcRenderer.invoke('gcal-refresh', gcalTokens.refresh_token);
+    if (!result.success) { gcalDisconnect(); return null; }
+    gcalTokens.access_token = result.tokens.access_token;
+    gcalTokens.expires_at   = Date.now() + (result.tokens.expires_in * 1000);
+    gcalSave();
+  }
+  return gcalTokens.access_token;
+}
+
+async function gcalSync() {
+  if (!gcalIsConnected()) return;
+  const syncBtn = document.getElementById('gcal-sync-btn');
+  if (syncBtn) syncBtn.textContent = '↻ Syncing...';
+
+  const token = await gcalGetValidToken();
+  if (!token) return;
+
+  const result = await ipcRenderer.invoke('gcal-fetch-events', token);
+  if (!result.success) {
+    if (result.status === 401) { gcalDisconnect(); return; }
+    showToast('⚠', 'Sync Failed', result.error, 'warn');
+    if (syncBtn) syncBtn.textContent = '↻ Sync';
+    return;
+  }
+
+  // Merge Google events into S.events (avoiding duplicates by gcalId)
+  let added = 0;
+  result.events.forEach(function(gev) {
+    if (!gev.summary) return;
+    const existing = S.events.find(function(e) { return e.gcalId === gev.id; });
+    const startRaw  = gev.start.dateTime || gev.start.date || '';
+    const date      = startRaw.slice(0, 10);
+    const time      = startRaw.length > 10 ? startRaw.slice(11, 16) : '';
+    if (existing) {
+      // Update if changed
+      existing.title = gev.summary;
+      existing.date  = date;
+      existing.time  = time;
+      existing.desc  = gev.description || '';
+    } else {
+      S.events.push({
+        id:      S.nid++,
+        gcalId:  gev.id,
+        title:   gev.summary,
+        date:    date,
+        time:    time,
+        desc:    gev.description || '',
+        color:   'rgba(66,133,244,0.6)',
+        notifyMin: 30,
+        fromGoogle: true
+      });
+      added++;
+    }
+  });
+
+  save();
+  renderCalendar();
+  if (syncBtn) syncBtn.textContent = '↻ Sync';
+  showToast('📅', 'Calendar Synced', added + ' new events imported from Google.', '');
+}
+
+// Push a KoPit event to Google Calendar
+async function gcalPushEvent(ev) {
+  if (!gcalIsConnected()) return;
+  const token = await gcalGetValidToken();
+  if (!token) return;
+
+  const start = ev.time
+    ? { dateTime: ev.date + 'T' + ev.time + ':00', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
+    : { date: ev.date };
+  const end   = ev.time
+    ? { dateTime: ev.date + 'T' + addMinutes(ev.time, 60), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
+    : { date: ev.date };
+
+  const gEvent = { summary: ev.title, description: ev.desc || 'Added from KoPit', start, end };
+  const result = await ipcRenderer.invoke('gcal-create-event', token, gEvent);
+  if (result.success && result.event.id) {
+    // Store the Google event ID on our local event
+    ev.gcalId = result.event.id;
+    save();
+  }
+}
+
+function addMinutes(timeStr, mins) {
+  const [h, m] = timeStr.split(':').map(Number);
+  const total  = h * 60 + m + mins;
+  return String(Math.floor(total / 60) % 24).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
+}
+
+// Auto-sync every 5 minutes when connected
+setInterval(function() { if (gcalIsConnected()) gcalSync(); }, 5 * 60 * 1000);
+
 // INIT
 try{initSupabase();}catch(e){console.log("supabase offline");}
-renderDash();renderCalendar();renderSubs();syncFocus();renderPomoDots();restoreWidget();
+gcalLoad();renderDash();renderCalendar();renderSubs();syncFocus();renderPomoDots();restoreWidget();gcalUpdateUI();setTimeout(function(){if(gcalIsConnected())gcalSync();},2000);
 // Fix chart rendering after layout is ready
 setTimeout(function(){renderRevenueChart();renderHeatmap();},100);
 
 
 
+// ════ CANVAS CHART PRIMITIVES (no dependencies) ════
+function drawLine(canvas,values,color,labels){
+  if(!canvas||!values||!values.length)return;
+  canvas.width=canvas.offsetWidth||500;
+  canvas.height=parseInt(canvas.getAttribute('height'))||130;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+  const pad={t:10,r:14,b:28,l:46};
+  const minV=Math.min(...values),maxV=Math.max(...values);
+  const rng=maxV-minV||1;
+  ctx.clearRect(0,0,W,H);
+  // grid lines
+  ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pad.t+(H-pad.t-pad.b)*i/4;
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    const v=maxV-rng*i/4;
+    ctx.fillStyle='rgba(180,200,190,0.45)';ctx.font='9px JetBrains Mono,monospace';
+    ctx.textAlign='right';ctx.fillText('$'+v.toFixed(v>100?0:2),pad.l-4,y+3);
+  }
+  // x labels
+  const step=Math.ceil(values.length/6);
+  ctx.fillStyle='rgba(180,200,190,0.45)';ctx.font='9px JetBrains Mono,monospace';ctx.textAlign='center';
+  values.forEach((_,i)=>{
+    if(i%step!==0)return;
+    const x=pad.l+(W-pad.l-pad.r)*i/(values.length-1||1);
+    if(labels&&labels[i])ctx.fillText(labels[i],x,H-6);
+  });
+  // gradient fill
+  const grad=ctx.createLinearGradient(0,pad.t,0,H-pad.b);
+  grad.addColorStop(0,color+'55');grad.addColorStop(1,color+'00');
+  ctx.beginPath();
+  values.forEach((v,i)=>{
+    const x=pad.l+(W-pad.l-pad.r)*i/(values.length-1||1);
+    const y=pad.t+(H-pad.t-pad.b)*(maxV-v)/rng;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.lineTo(pad.l+(W-pad.l-pad.r),H-pad.b);
+  ctx.lineTo(pad.l,H-pad.b);ctx.closePath();
+  ctx.fillStyle=grad;ctx.fill();
+  // line
+  ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin='round';
+  values.forEach((v,i)=>{
+    const x=pad.l+(W-pad.l-pad.r)*i/(values.length-1||1);
+    const y=pad.t+(H-pad.t-pad.b)*(maxV-v)/rng;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  // end dot
+  const lx=W-pad.r,lv=values[values.length-1];
+  const ly=pad.t+(H-pad.t-pad.b)*(maxV-lv)/rng;
+  ctx.beginPath();ctx.arc(lx,ly,3.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+}
+
+function drawDonut(canvas,values,colors,labels){
+  if(!canvas)return;
+  const sz=Math.min(canvas.offsetWidth||160,100);
+  canvas.width=canvas.offsetWidth||300;
+  canvas.height=parseInt(canvas.getAttribute('height'))||100;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const cx=sz/2+6,cy=H/2,r=sz/2-6,ri=r*0.6;
+  const total=values.reduce((a,b)=>a+b,0)||1;
+  let angle=-Math.PI/2;
+  values.forEach((v,i)=>{
+    const sweep=2*Math.PI*v/total;
+    ctx.beginPath();ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,angle,angle+sweep);ctx.closePath();
+    ctx.fillStyle=colors[i]||'#2d6a4f';ctx.fill();
+    angle+=sweep;
+  });
+  // hole
+  ctx.beginPath();ctx.arc(cx,cy,ri,0,2*Math.PI);
+  ctx.fillStyle='#0e1a14';ctx.fill();
+  // legend
+  const lx=sz+18;
+  labels.forEach((lbl,i)=>{
+    const y=H/2-(labels.length-1)*9+i*18;
+    ctx.fillStyle=colors[i]||'#2d6a4f';
+    ctx.fillRect(lx,y-5,10,10);
+    ctx.fillStyle='rgba(200,220,210,0.7)';ctx.font='11px Inter,sans-serif';ctx.textAlign='left';
+    const pct=total>0?((values[i]/total)*100).toFixed(1):'0';
+    ctx.fillText(lbl+' '+pct+'%',lx+14,y+4);
+  });
+}
+
+
 // ════ STOCKS ════
-let stockChartInst=null, stockPriceChartInst=null;
 S.stocks = S.stocks||[];
 S.stockRange = S.stockRange||'1W';
 
 function renderStocks(){
   renderStockHoldings();
-  renderStockPortfolioChart();
-  renderStockPriceChart();
+  setTimeout(function(){renderStockPortfolioChart();renderStockPriceChart();},60);
 }
 
 function renderStockHoldings(){
@@ -1368,15 +1777,40 @@ function renderStockHoldings(){
 
 function renderStockPortfolioChart(){
   const canvas=document.getElementById('stock-chart');
-  if(!canvas||!S.stocks.length)return;
-  if(stockChartInst){stockChartInst.destroy();stockChartInst=null;}
+  if(!canvas)return;
+  const w=canvas.offsetWidth||400;const h=110;
+  canvas.width=w;canvas.height=h;
   const ctx=canvas.getContext('2d');
-  const colors=S.stocks.map(s=>s.color||'#2d6a4f');
+  ctx.clearRect(0,0,w,h);
+  if(!S.stocks.length){
+    ctx.fillStyle='rgba(100,160,130,0.3)';ctx.font='12px Inter';ctx.textAlign='center';
+    ctx.fillText('Add stocks to see allocation',w/2,h/2);return;
+  }
   const vals=S.stocks.map(s=>s.qty*s.price);
-  stockChartInst=new Chart(ctx,{type:'doughnut',data:{
-    labels:S.stocks.map(s=>s.ticker),
-    datasets:[{data:vals,backgroundColor:colors.map(c=>c+'cc'),borderColor:colors,borderWidth:2,hoverOffset:6}]
-  },options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'rgba(200,220,210,0.7)',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:function(ctx){return ctx.label+': $'+ctx.parsed.toFixed(2);}}}},cutout:'68%'}});
+  const total=vals.reduce((a,b)=>a+b,0);
+  const colors=S.stocks.map(s=>s.color||'#2d6a4f');
+  const cx=h/2+8,cy=h/2,r=h/2-8,ri=r*0.55;
+  let angle=-Math.PI/2;
+  vals.forEach((v,i)=>{
+    const slice=(v/total)*Math.PI*2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,angle,angle+slice);ctx.closePath();
+    ctx.fillStyle=colors[i]+'cc';ctx.fill();
+    ctx.strokeStyle=colors[i];ctx.lineWidth=2;ctx.stroke();
+    angle+=slice;
+  });
+  // Center hole
+  ctx.beginPath();ctx.arc(cx,cy,ri,0,Math.PI*2);ctx.fillStyle='#0e1a14';ctx.fill();
+  ctx.font='bold 10px JetBrains Mono';ctx.fillStyle='rgba(200,220,210,0.8)';ctx.textAlign='center';
+  ctx.fillText('$'+(total).toFixed(0),cx,cy+4);
+  // Legend
+  const lx=cx+r+20;let ly=16;
+  ctx.font='10px Inter';
+  S.stocks.forEach((s,i)=>{
+    ctx.fillStyle=colors[i];ctx.fillRect(lx,ly-8,10,10);
+    ctx.fillStyle='rgba(200,220,210,0.7)';ctx.textAlign='left';
+    ctx.fillText(s.ticker+' '+((vals[i]/total)*100).toFixed(0)+'%',lx+14,ly);
+    ly+=16;
+  });
 }
 
 let selectedStockIdx=0;
@@ -1392,23 +1826,16 @@ function setStockRange(r,btn){
 function renderStockPriceChart(){
   const canvas=document.getElementById('stock-price-chart');
   if(!canvas)return;
-  if(stockPriceChartInst){stockPriceChartInst.destroy();stockPriceChartInst=null;}
-  const ctx=canvas.getContext('2d');
   if(!S.stocks.length){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle='rgba(100,130,115,0.4)';ctx.font='13px Inter';ctx.textAlign='center';
-    ctx.fillText('Add stocks to see price history',canvas.offsetWidth/2,70);
+    const ctx=canvas.getContext('2d');
+    canvas.width=canvas.offsetWidth||500;canvas.height=130;
+    ctx.fillStyle='rgba(100,130,115,0.35)';ctx.font='13px Inter';ctx.textAlign='center';
+    ctx.fillText('Add stocks to see price history',canvas.width/2,70);
     return;
   }
   const s=S.stocks[selectedStockIdx]||S.stocks[0];
   const pts=s.history&&s.history.length?s.history:generateFakePriceHistory(s.price,S.stockRange);
-  const col=s.color||'#2d6a4f';
-  const grad=ctx.createLinearGradient(0,0,0,130);
-  grad.addColorStop(0,col+'55');grad.addColorStop(1,col+'00');
-  stockPriceChartInst=new Chart(ctx,{type:'line',data:{
-    labels:pts.map((_,i)=>i%Math.ceil(pts.length/6)===0?pts[i].d:''),
-    datasets:[{label:s.ticker,data:pts.map(p=>p.v),borderColor:col,backgroundColor:grad,borderWidth:2,pointRadius:0,fill:true,tension:0.4}]
-  },options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'$'+ctx.parsed.y.toFixed(2)}}},scales:{x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'rgba(180,200,190,0.5)',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'rgba(180,200,190,0.5)',font:{size:10},callback:v=>'$'+v.toFixed(0)}}}}});
+  drawLine(canvas,pts.map(p=>p.v),s.color||'#2d6a4f',pts.map(p=>p.d));
 }
 
 function generateFakePriceHistory(currentPrice,range){
@@ -1428,48 +1855,120 @@ function generateFakePriceHistory(currentPrice,range){
 function delStock(idx){S.stocks.splice(idx,1);save();renderStocks();}
 
 // ════ CRYPTO ════
-let cryptoChartInst=null;
 S.crypto = S.crypto||[];
 
+// Full coin list — Binance pairs (USDT)
 const CRYPTO_COINS=[
-  {id:'bitcoin',symbol:'BTC',name:'Bitcoin',color:'#f7931a'},
-  {id:'ethereum',symbol:'ETH',name:'Ethereum',color:'#627eea'},
-  {id:'solana',symbol:'SOL',name:'Solana',color:'#9945ff'},
-  {id:'binancecoin',symbol:'BNB',name:'BNB',color:'#f3ba2f'},
-  {id:'cardano',symbol:'ADA',name:'Cardano',color:'#0d3349'},
-  {id:'ripple',symbol:'XRP',name:'XRP',color:'#346aa9'},
-  {id:'polkadot',symbol:'DOT',name:'Polkadot',color:'#e6007a'},
-  {id:'dogecoin',symbol:'DOGE',name:'Dogecoin',color:'#c3a634'},
-  {id:'avalanche-2',symbol:'AVAX',name:'Avalanche',color:'#e84142'},
-  {id:'chainlink',symbol:'LINK',name:'Chainlink',color:'#2a5ada'},
+  {symbol:'BTC',name:'Bitcoin',color:'#f7931a',pair:'BTCUSDT'},
+  {symbol:'ETH',name:'Ethereum',color:'#627eea',pair:'ETHUSDT'},
+  {symbol:'SOL',name:'Solana',color:'#9945ff',pair:'SOLUSDT'},
+  {symbol:'BNB',name:'BNB',color:'#f3ba2f',pair:'BNBUSDT'},
+  {symbol:'ADA',name:'Cardano',color:'#4a9eff',pair:'ADAUSDT'},
+  {symbol:'XRP',name:'XRP',color:'#346aa9',pair:'XRPUSDT'},
+  {symbol:'DOT',name:'Polkadot',color:'#e6007a',pair:'DOTUSDT'},
+  {symbol:'DOGE',name:'Dogecoin',color:'#c3a634',pair:'DOGEUSDT'},
+  {symbol:'AVAX',name:'Avalanche',color:'#e84142',pair:'AVAXUSDT'},
+  {symbol:'LINK',name:'Chainlink',color:'#2a5ada',pair:'LINKUSDT'},
+  {symbol:'MATIC',name:'Polygon',color:'#8247e5',pair:'MATICUSDT'},
+  {symbol:'UNI',name:'Uniswap',color:'#ff007a',pair:'UNIUSDT'},
+  {symbol:'LTC',name:'Litecoin',color:'#bfbbbb',pair:'LTCUSDT'},
+  {symbol:'ATOM',name:'Cosmos',color:'#6f7390',pair:'ATOMUSDT'},
+  {symbol:'FIL',name:'Filecoin',color:'#0090ff',pair:'FILUSDT'},
+  {symbol:'APT',name:'Aptos',color:'#2dd8a3',pair:'APTUSDT'},
+  {symbol:'ARB',name:'Arbitrum',color:'#28a0f0',pair:'ARBUSDT'},
+  {symbol:'OP',name:'Optimism',color:'#ff0420',pair:'OPUSDT'},
+  {symbol:'SUI',name:'Sui',color:'#4da2ff',pair:'SUIUSDT'},
+  {symbol:'TON',name:'Toncoin',color:'#0098ea',pair:'TONUSDT'},
+  {symbol:'TRX',name:'TRON',color:'#ff0013',pair:'TRXUSDT'},
+  {symbol:'NEAR',name:'NEAR',color:'#00ec97',pair:'NEARUSDT'},
+  {symbol:'ICP',name:'Internet Computer',color:'#29abe2',pair:'ICPUSDT'},
+  {symbol:'INJ',name:'Injective',color:'#00b4d8',pair:'INJUSDT'},
+  {symbol:'FTM',name:'Fantom',color:'#13b5ec',pair:'FTMUSDT'},
+  {symbol:'SAND',name:'The Sandbox',color:'#04adef',pair:'SANDUSDT'},
+  {symbol:'MANA',name:'Decentraland',color:'#ff2d55',pair:'MANAUSDT'},
+  {symbol:'PEPE',name:'Pepe',color:'#479f53',pair:'PEPEUSDT'},
+  {symbol:'WIF',name:'dogwifhat',color:'#a855f7',pair:'WIFUSDT'},
+  {symbol:'BONK',name:'Bonk',color:'#f97316',pair:'BONKUSDT'},
 ];
 
-const CRYPTO_PRICES={BTC:87500,ETH:3200,SOL:175,BNB:420,ADA:0.45,XRP:0.55,DOT:8.5,DOGE:0.12,AVAX:38,LINK:18};
+const CRYPTO_PRICES={};
+// Seed with approximate prices so UI shows something before fetch
+'BTC:94000,ETH:3300,SOL:185,BNB:610,ADA:0.45,XRP:0.55,DOT:7.5,DOGE:0.13,AVAX:36,LINK:14,MATIC:0.55,UNI:8.5,LTC:95,ATOM:8,FIL:5.5,APT:8,ARB:1.1,OP:2.1,SUI:3.8,TON:5.8,TRX:0.12,NEAR:5.8,ICP:12,INJ:22,FTM:0.65,SAND:0.45,MANA:0.42,PEPE:0.000014,WIF:2.1,BONK:0.000025'.split(',').forEach(function(p){var kv=p.split(':');CRYPTO_PRICES[kv[0]]=parseFloat(kv[1]);});
+let cryptoWS=null; // WebSocket for real-time prices
 
 async function fetchCryptoPrices(){
   try{
-    const ids=CRYPTO_COINS.map(c=>c.id).join(',');
-    const res=await fetch('https://api.coingecko.com/api/v3/simple/price?ids='+ids+'&vs_currencies=usd&include_24hr_change=true');
-    if(!res.ok)throw new Error('API error');
+    // Binance 24hr ticker - no API key, no CORS issues in Electron
+    const pairs=CRYPTO_COINS.map(function(c){return c.pair;});
+    const url='https://api.binance.com/api/v3/ticker/24hr?symbols=['+pairs.map(function(p){return'"'+p+'"';}).join(',')+']';
+    const res=await fetch(url);
+    if(!res.ok)throw new Error('Binance API error '+res.status);
     const data=await res.json();
-    CRYPTO_COINS.forEach(c=>{
-      if(data[c.id]){
-        CRYPTO_PRICES[c.symbol]=data[c.id].usd;
-        c.change24h=data[c.id].usd_24h_change||0;
+    data.forEach(function(ticker){
+      var coin=CRYPTO_COINS.find(function(c){return c.pair===ticker.symbol;});
+      if(coin){
+        CRYPTO_PRICES[coin.symbol]=parseFloat(ticker.lastPrice);
+        coin.change24h=parseFloat(ticker.priceChangePercent);
+        coin.high24h=parseFloat(ticker.highPrice);
+        coin.low24h=parseFloat(ticker.lowPrice);
+        coin.vol24h=parseFloat(ticker.quoteVolume);
       }
     });
+    if(S.crypto&&S.crypto.length){
+      S.crypto.forEach(function(h){if(CRYPTO_PRICES[h.symbol])h.price=CRYPTO_PRICES[h.symbol];});
+      save();
+    }
     return true;
   }catch(e){
-    console.log('CoinGecko offline, using cached prices');
+    console.log('Binance fetch error:',e.message);
     return false;
   }
 }
 
-async function renderCrypto(){
-  await fetchCryptoPrices();
+// Binance WebSocket for real-time streaming (called from crypto page)
+function startCryptoWebSocket(){
+  if(cryptoWS&&cryptoWS.readyState<2)return; // already running
+  var streams=CRYPTO_COINS.slice(0,10).map(function(c){return c.pair.toLowerCase()+'@miniTicker';}).join('/');
+  cryptoWS=new WebSocket('wss://stream.binance.com:9443/stream?streams='+streams);
+  cryptoWS.onmessage=function(e){
+    try{
+      var msg=JSON.parse(e.data);
+      if(msg.data){
+        var coin=CRYPTO_COINS.find(function(c){return c.pair===msg.data.s;});
+        if(coin){
+          var newPrice=parseFloat(msg.data.c);
+          var oldPrice=CRYPTO_PRICES[coin.symbol]||newPrice;
+          CRYPTO_PRICES[coin.symbol]=newPrice;
+          coin.change24h=parseFloat(msg.data.P);
+          // Flash price update in UI
+          var el=document.getElementById('cprice-'+coin.symbol);
+          if(el){
+            el.textContent='$'+formatCryptoPrice(newPrice);
+            el.style.color=newPrice>=oldPrice?'var(--ok-txt)':'var(--er-txt)';
+            setTimeout(function(){el.style.color='';},1000);
+          }
+        }
+      }
+    }catch(err){}
+  };
+  cryptoWS.onerror=function(){cryptoWS=null;};
+}
+function stopCryptoWebSocket(){if(cryptoWS){cryptoWS.close();cryptoWS=null;}}
+function formatCryptoPrice(p){
+  if(p>=1000)return p.toLocaleString(undefined,{maximumFractionDigits:2});
+  if(p>=1)return p.toFixed(4);
+  if(p>=0.0001)return p.toFixed(6);
+  return p.toFixed(8);
+}
+
+function renderCrypto(){
   renderCryptoHoldings();
-  renderCryptoPortfolioChart();
-  renderCryptoMarket();
+  setTimeout(function(){renderCryptoPortfolioChart();renderCryptoMarket();},50);
+  fetchCryptoPrices().then(function(){
+    renderCryptoHoldings();
+    setTimeout(function(){renderCryptoPortfolioChart();renderCryptoMarket();},100);
+    startCryptoWebSocket();
+  }).catch(function(){});
 }
 
 function renderCryptoHoldings(){
@@ -1512,14 +2011,10 @@ function renderCryptoHoldings(){
 function renderCryptoPortfolioChart(){
   const canvas=document.getElementById('crypto-chart');
   if(!canvas||!S.crypto.length)return;
-  if(cryptoChartInst){cryptoChartInst.destroy();cryptoChartInst=null;}
-  const ctx=canvas.getContext('2d');
-  const colors=S.crypto.map(h=>(CRYPTO_COINS.find(c=>c.symbol===h.symbol)||{color:'#2d6a4f'}).color);
   const vals=S.crypto.map(h=>h.qty*(CRYPTO_PRICES[h.symbol]||h.price||0));
-  cryptoChartInst=new Chart(ctx,{type:'doughnut',data:{
-    labels:S.crypto.map(h=>h.symbol),
-    datasets:[{data:vals,backgroundColor:colors.map(c=>c+'cc'),borderColor:colors,borderWidth:2,hoverOffset:6}]
-  },options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'rgba(200,220,210,0.7)',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:function(ctx){return ctx.label+': $'+ctx.parsed.toFixed(2);}}}},cutout:'68%'}});
+  const colors=S.crypto.map(h=>(CRYPTO_COINS.find(c=>c.symbol===h.symbol)||{color:'#2d6a4f'}).color);
+  const labels=S.crypto.map(h=>h.symbol);
+  drawDonut(canvas,vals,colors,labels);
 }
 
 function renderCryptoMarket(){
@@ -1541,20 +2036,99 @@ function delCrypto(idx){S.crypto.splice(idx,1);save();renderCrypto();}
 
 // ════ NEWS FEED ════
 let newsFilter='all';
-const NEWS_FEED=[
-  {title:"New Trends in Game UI Design for 2026",source:"GDC Blog",time:"2h ago",tag:"gameui",url:"#",summary:"Top studios are embracing minimalist HUDs and adaptive interfaces that respond to gameplay intensity.",img:"🎮"},
-  {title:"AI-Powered NPCs Are Changing Game Design",source:"Game Developer",time:"4h ago",tag:"ai",url:"#",summary:"Generative AI is enabling dynamic quest systems and dialogue trees that adapt to player choices in real time.",img:"🤖"},
-  {title:"Unity UI Toolkit 2026 — What's New",source:"Unity Blog",time:"6h ago",tag:"gameui",url:"#",summary:"Major improvements to the UI Builder with new animation support and better mobile scaling tools.",img:"🛠"},
-  {title:"Claude 4 Sets New Benchmark in Reasoning",source:"Anthropic",time:"8h ago",tag:"ai",url:"#",summary:"The latest Claude model achieves state-of-the-art results on coding, math, and multi-step planning tasks.",img:"✦"},
-  {title:"Figma's Game Design Tools Are Gaining Traction",source:"Design Week",time:"10h ago",tag:"design",url:"#",summary:"More game studios are adopting Figma for prototyping UI flows before building in-engine.",img:"🎨"},
-  {title:"Unreal Engine 6 UI System Preview",source:"Epic Games",time:"12h ago",tag:"gameui",url:"#",summary:"Epic previews a fully node-based UI system with real-time previews and in-engine CSS-like styling.",img:"⚡"},
-  {title:"How AI is Automating Icon Design Workflows",source:"Smashing Magazine",time:"1d ago",tag:"ai",url:"#",summary:"Tools like Midjourney and Adobe Firefly are being integrated into production pipelines for asset generation.",img:"🖌"},
-  {title:"The Psychology of HUD Design in Action Games",source:"Gamasutra",time:"1d ago",tag:"gameui",url:"#",summary:"Research shows players perform better with adaptive HUDs that reduce information overload at critical moments.",img:"🧠"},
-  {title:"GPT-5 Released — Comparison with Claude 4",source:"The Verge",time:"2d ago",tag:"ai",url:"#",summary:"Side-by-side benchmarks reveal strengths and weaknesses of the two leading AI models for creative tasks.",img:"🆚"},
-  {title:"Motion Design Trends in Mobile Game UIs",source:"Dribbble Blog",time:"2d ago",tag:"design",url:"#",summary:"Micro-animations and haptic feedback are becoming standard in top-grossing mobile titles.",img:"📱"},
-  {title:"Accessibility in Game UI — A Designer's Guide",source:"A11y Project",time:"3d ago",tag:"gameui",url:"#",summary:"Best practices for color contrast, font sizes, and iconography in games to support all players.",img:"♿"},
-  {title:"AI Art Tools Are Getting Better at Consistency",source:"PetaPixel",time:"3d ago",tag:"ai",url:"#",summary:"New diffusion models can maintain character and style consistency across full asset packs.",img:"🎭"},
+let NEWS_FEED=[];
+let newsLoaded=false;
+
+// RSS sources - fetched via allorigins proxy to bypass CORS
+const RSS_SOURCES=[
+  {url:'https://www.gamedeveloper.com/rss.xml',tag:'gameui',img:'🎮',name:'Game Developer'},
+  {url:'https://venturebeat.com/feed/',tag:'ai',img:'🤖',name:'VentureBeat'},
+  {url:'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml',tag:'ai',img:'🤖',name:'The Verge AI'},
+  {url:'https://feeds.arstechnica.com/arstechnica/technology-lab',tag:'ai',img:'🔬',name:'Ars Technica'},
+  {url:'https://www.creativebloq.com/feeds/all',tag:'design',img:'🎨',name:'Creative Bloq'},
+  {url:'https://80.lv/feed/',tag:'gameui',img:'🎮',name:'80.lv'},
+  {url:'https://www.rockpapershotgun.com/feed',tag:'gameui',img:'🎯',name:'Rock Paper Shotgun'},
 ];
+
+// Try multiple CORS proxies - first one that works wins
+const CORS_PROXIES=[
+  'https://api.allorigins.win/get?url=',
+  'https://corsproxy.io/?',
+  'https://api.codetabs.com/v1/proxy?quest=',
+];
+
+function parseRSSDate(str){
+  if(!str)return'just now';
+  try{
+    const d=new Date(str);
+    const diff=Math.floor((Date.now()-d.getTime())/60000);
+    if(diff<60)return diff+'m ago';
+    if(diff<1440)return Math.floor(diff/60)+'h ago';
+    return Math.floor(diff/1440)+'d ago';
+  }catch(e){return'recently';}
+}
+
+function parseRSSXML(xml,source){
+  var items=[];
+  try{
+    var parser=new DOMParser();
+    var doc=parser.parseFromString(xml,'text/xml');
+    if(doc.querySelector('parsererror'))doc=parser.parseFromString(xml,'text/html');
+    var entries=doc.querySelectorAll('item,entry');
+    entries.forEach(function(item){
+      var title=(item.querySelector('title')||{textContent:''}).textContent.replace(/<[^>]+>/g,'').trim();
+      var linkEl=item.querySelector('link');
+      var link=(linkEl&&linkEl.textContent.trim())||(linkEl&&linkEl.getAttribute('href'))||'#';
+      var descEl=item.querySelector('description,summary,content');
+      var desc=descEl?(descEl.textContent||descEl.innerHTML||'').replace(/<[^>]+>/g,'').replace(/&[a-z]+;/g,' ').trim().slice(0,180):'';
+      var pubDate=(item.querySelector('pubDate,published,updated,dc\\:date')||{textContent:''}).textContent;
+      if(title&&title.length>5){
+        items.push({
+          title:title,
+          source:source.name||source.url.replace(/https?:\/\//,'').split('/')[0].replace('www.',''),
+          time:parseRSSDate(pubDate),
+          tag:source.tag,
+          url:link,
+          summary:desc||'Read the full article...',
+          img:source.img
+        });
+      }
+    });
+  }catch(e){console.log('RSS parse error:',e);}
+  return items;
+}
+
+async function fetchRSSFeed(source){
+  for(var pi=0;pi<CORS_PROXIES.length;pi++){
+    try{
+      var proxyUrl=CORS_PROXIES[pi]+encodeURIComponent(source.url);
+      var res=await fetch(proxyUrl,{signal:AbortSignal.timeout(8000)});
+      if(!res.ok)continue;
+      var text=await res.text();
+      // allorigins returns JSON wrapper
+      var xml=text;
+      try{var j=JSON.parse(text);if(j.contents)xml=j.contents;}catch(e){}
+      var items=parseRSSXML(xml,source);
+      if(items.length>0)return items;
+    }catch(e){continue;}
+  }
+  return[];
+}
+
+async function loadRSSFeeds(){
+  const newsEl=document.getElementById('news-feed');
+  if(newsEl)newsEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 0;color:var(--txt3);font-family:var(--mono)">⟳ Loading live news...</div>';
+  const results=await Promise.all(RSS_SOURCES.map(fetchRSSFeed));
+  NEWS_FEED=[];
+  results.forEach(function(arr){NEWS_FEED=NEWS_FEED.concat(arr);});
+  // Sort by recency (items with 'ago' sooner = smaller number)
+  NEWS_FEED.sort(function(a,b){
+    const val=function(t){var m=t.match(/^(\d+)([mhd])/);if(!m)return 9999;return parseInt(m[1])*(m[2]==='m'?1:m[2]==='h'?60:1440);};
+    return val(a.time)-val(b.time);
+  });
+  newsLoaded=true;
+  renderNews();
+}
 
 function filterNews(f,btn){
   newsFilter=f;
@@ -1564,9 +2138,9 @@ function filterNews(f,btn){
 }
 
 function refreshNews(){
-  const el=document.getElementById('news-feed');
-  el.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 0;color:var(--txt3)">↻ Fetching latest news...</div>';
-  setTimeout(renderNews,800);
+  newsLoaded=false;
+  NEWS_FEED=[];
+  loadRSSFeeds();
 }
 
 function renderNews(){
@@ -1590,10 +2164,51 @@ function renderNews(){
     </div>`).join('');
 }
 
-function renderNewsPage(){renderNews();}
+function renderNewsPage(){
+  if(!newsLoaded){loadRSSFeeds();}
+  else{renderNews();}
+}
 
 
 
+function pickStock(ticker){
+  document.querySelectorAll('.asset-pick').forEach(function(el){el.classList.remove('selected');});
+  var picked=document.querySelector('.asset-pick[data-s="'+ticker+'"]');
+  if(picked)picked.classList.add('selected');
+  var sel=document.getElementById('m-selected-asset');
+  var lbl=document.getElementById('m-sel-label');
+  var tk=document.getElementById('m-ticker');
+  var nm=document.getElementById('m-sname');
+  if(sel)sel.style.display='block';
+  if(lbl)lbl.innerHTML=ticker+' — <span style="color:var(--txt3);font-size:12px">fetching price...</span>';
+  if(tk)tk.value=ticker;
+  if(nm)nm.value=ticker;
+  // Fetch live price from Yahoo Finance (unofficial, no key needed)
+  fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?interval=1d&range=1d')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var price=data&&data.chart&&data.chart.result&&data.chart.result[0]&&data.chart.result[0].meta&&data.chart.result[0].meta.regularMarketPrice;
+      var change=data&&data.chart&&data.chart.result&&data.chart.result[0]&&data.chart.result[0].meta&&data.chart.result[0].meta.regularMarketChangePercent;
+      if(price){
+        var col=change>=0?'var(--ok-txt)':'var(--er-txt)';
+        if(lbl)lbl.innerHTML=ticker+' <span style="color:'+col+';font-family:var(--mono);font-size:13px;font-weight:700">$'+price.toFixed(2)+'</span>'+(change?' <span style="color:'+col+';font-size:11px">'+(change>=0?'+':'')+change.toFixed(2)+'%</span>':'');
+        var pf=document.getElementById('m-price');
+        var cf=document.getElementById('m-cost');
+        if(pf&&!pf.value)pf.value=price.toFixed(2);
+        if(cf&&!cf.value)cf.value=price.toFixed(2);
+      } else {
+        if(lbl)lbl.textContent=ticker+' — price unavailable';
+      }
+    })
+    .catch(function(){if(lbl)lbl.textContent=ticker+' — offline mode';});
+}
+function filterAssets(q,type){
+  var term=q.toUpperCase().trim();
+  document.querySelectorAll('.asset-pick').forEach(function(el){
+    var s=el.getAttribute('data-s')||'';
+    el.style.display=(!term||s.indexOf(term)!==-1)?'':'none';
+  });
+}
 function saveStock(){
   var t=(document.getElementById('m-ticker')||{value:''}).value.trim().toUpperCase();
   var n=(document.getElementById('m-sname')||{value:''}).value.trim();
@@ -1601,21 +2216,45 @@ function saveStock(){
   var p=parseFloat((document.getElementById('m-price')||{value:0}).value)||0;
   var a=parseFloat((document.getElementById('m-cost')||{value:0}).value)||p;
   var col=(document.getElementById('m-scolor')||{value:'#2d6a4f'}).value;
-  if(!t||!q||!p){toast('Fill all required fields','warn');return;}
+  if(!t){showToast('⚠','Select a Stock','Pick a stock from the list first.','warn');return;}
+  if(!q||!p){showToast('⚠','Missing Fields','Enter shares and price.','warn');return;}
   if(!S.stocks)S.stocks=[];
   S.stocks.push({ticker:t,name:n||t,qty:q,price:p,avgCost:a,color:col,history:[]});
-  save();closeModal();renderStocks();toast('✓ '+t+' added to portfolio');
+  save();closeModal();renderStocks();showToast('✓','Stock Added',t+' added to your portfolio.','');
 }
 
+function pickCoin(sym,name,col){
+  document.querySelectorAll('.coin-pick').forEach(function(el){el.classList.remove('selected');});
+  var picked=document.querySelector('.coin-pick[data-s="'+sym+'"]');
+  if(picked)picked.classList.add('selected');
+  var sel=document.getElementById('m-selected-asset');
+  var lbl=document.getElementById('m-sel-label');
+  var ci=document.getElementById('m-coin');
+  var cn=document.getElementById('m-coin-name');
+  var cc=document.getElementById('m-coin-color');
+  if(sel)sel.style.display='block';
+  var livePrice=CRYPTO_PRICES[sym];
+  var priceStr=livePrice?(' · <span style="color:var(--ok-txt);font-family:var(--mono)">$'+formatCryptoPrice(livePrice)+'</span>'):'';
+  if(lbl){lbl.innerHTML='<span style="color:'+col+';font-weight:700">'+sym+'</span> — '+name+priceStr;}
+  if(ci)ci.value=sym;
+  if(cn)cn.value=name;
+  if(cc)cc.value=col;
+  // Auto-fill the buy price field with current live price
+  var costField=document.getElementById('m-ccost');
+  if(costField&&livePrice&&!costField.value){costField.value=livePrice.toFixed(livePrice>=1?2:8);}
+}
 function saveCrypto(){
   var s=(document.getElementById('m-coin')||{value:''}).value;
+  var name=(document.getElementById('m-coin-name')||{value:''}).value||s;
+  var col=(document.getElementById('m-coin-color')||{value:'#2d6a4f'}).value;
   var q=parseFloat((document.getElementById('m-cqty')||{value:0}).value)||0;
   var a=parseFloat((document.getElementById('m-ccost')||{value:0}).value)||0;
-  if(!s||!q||!a){toast('Fill all fields','warn');return;}
+  if(!s){showToast('⚠','Select a Coin','Pick a coin from the list first.','warn');return;}
+  if(!q||!a){showToast('⚠','Missing Fields','Enter amount and buy price.','warn');return;}
   if(!S.crypto)S.crypto=[];
-  const coin=CRYPTO_COINS.find(c=>c.symbol===s)||{name:s,color:'#2d6a4f'};
-  S.crypto.push({symbol:s,name:coin.name,qty:q,avgCost:a,price:CRYPTO_PRICES[s]||a});
-  save();closeModal();renderCrypto();toast('✓ '+s+' added to crypto portfolio');
+  var livePrice=CRYPTO_PRICES[s]||a;
+  S.crypto.push({symbol:s,name:name,qty:q,avgCost:a,price:livePrice,color:col});
+  save();closeModal();renderCrypto();showToast('✓','Coin Added',s+' added to your portfolio.','');
 }
 
 </script>
